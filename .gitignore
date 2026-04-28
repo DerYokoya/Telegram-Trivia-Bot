@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+*.env.local
+
+# React app build
+tele-bot-app/dist/
+tele-bot-app/node_modules/
