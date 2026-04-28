@@ -2,6 +2,10 @@
 
 An AI-powered Telegram bot that generates trivia quizzes on any topic, using [OpenRouter](https://openrouter.ai) for free AI requests.
 
+## Showcase
+
+https://github.com/user-attachments/assets/13ebc51f-b964-4513-affc-9c55e642d011
+
 ## What it does
 
 - You send `/quiz` and pick a topic — anything: history, science, sports, pop culture
