@@ -1,6 +1,6 @@
 # Telegram Trivia Quiz Bot
 
-An AI-powered Telegram bot that generates trivia quizzes on any topic, using [OpenRouter](https://openrouter.ai) for free AI requests. In order to use it, visit [Urahara Trivia](https://t.me/UraharaTriviaBot)
+An AI-powered Telegram bot that generates trivia quizzes on any topic, using [OpenRouter](https://openrouter.ai) for free AI requests.
 
 ## What it does
 

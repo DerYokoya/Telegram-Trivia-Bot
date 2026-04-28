@@ -3,7 +3,7 @@
 const OPENROUTER_API_KEY = process.env["OPENROUTER_API_KEY"];
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 // Use a free model on OpenRouter — change to any model you prefer
-const MODEL = process.env["OPENROUTER_MODEL"] ?? "meta-llama/llama-3.3-8b-instruct:free";
+const MODEL = process.env["OPENROUTER_MODEL"] ?? "openai/gpt-oss-120b:free";
 
 if (!OPENROUTER_API_KEY) {
   throw new Error(
@@ -22,6 +22,7 @@ export async function generateTriviaQuestions(
   topic: string,
   count: number,
 ): Promise<TriviaQuestion[]> {
+  console.log("Using model:", MODEL);
   const prompt = `Create exactly ${count} multiple-choice trivia questions about "${topic}".
 Mix difficulty (easy, medium, hard).
 Each question must have exactly 4 options and one clearly correct answer.
