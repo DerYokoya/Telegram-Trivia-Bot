@@ -7,7 +7,7 @@ import {
   formatDuration,
   type QuizSession,
 } from "./quiz";
-
+const lifetimeStats = new Map<number, { total: number; correct: number }>();
 const COUNT_OPTIONS = [5, 10, 15, 20];
 
 function escapeHtml(text: string): string {
@@ -132,7 +132,11 @@ async function finishQuiz(ctx: Context, session: QuizSession) {
     await ctx.reply(chunk, { parse_mode: "HTML" });
   }
 
-  session.phase = "finished"; // keep results so /stats can read them
+  // Update lifetime stats
+  const stats = lifetimeStats.get(session.chatId) ?? { total: 0, correct: 0 };
+  stats.total += total;
+  stats.correct += correct;
+  lifetimeStats.set(session.chatId, stats);
 }
 
 function chunkText(text: string, max: number): string[] {
@@ -213,21 +217,19 @@ export function startTelegramBot(): void {
   });
 
   bot.command("stats", async (ctx) => {
-    const session = getSession(ctx.chat.id);
+    const stats = lifetimeStats.get(ctx.chat.id);
 
-    if (session.results.length === 0) {
+    if (!stats || stats.total === 0) {
       await ctx.reply("No stats yet — play a quiz first using /quiz!");
       return;
     }
 
-    const total = session.results.length;
-    const correct = session.results.filter((r) => r.isCorrect).length;
-    const score = Math.round((correct / total) * 100);
+    const score = Math.round((stats.correct / stats.total) * 100);
 
     await ctx.reply(
-      `<b>Your Stats</b>\n\n` +
-        `<b>Total questions answered:</b> ${total}\n` +
-        `<b>Correct:</b> ${correct}\n` +
+      `<b>Your Lifetime Stats</b>\n\n` +
+        `<b>Total questions answered:</b> ${stats.total}\n` +
+        `<b>Correct:</b> ${stats.correct}\n` +
         `<b>Score:</b> ${score}%\n`,
       { parse_mode: "HTML" },
     );
