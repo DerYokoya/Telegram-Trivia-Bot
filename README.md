@@ -4,7 +4,7 @@ An AI-powered Telegram bot that generates trivia quizzes on any topic, using [Op
 
 ## Showcase
 
-https://github.com/user-attachments/assets/13ebc51f-b964-4513-affc-9c55e642d011
+https://github.com/user-attachments/assets/751430aa-38fa-4062-ac75-afce571293b5
 
 ## What it does
 
@@ -90,6 +90,8 @@ tele-quiz-bot/
 | `/start` | Welcome message |
 | `/quiz` | Start a new quiz |
 | `/cancel` | Stop the current quiz |
+| `/stats` | View your stats |
+| `/about` | Info about the bot |
 | `/help` | How to use the bot |
 
 ## Deploying
