@@ -132,7 +132,7 @@ async function finishQuiz(ctx: Context, session: QuizSession) {
     await ctx.reply(chunk, { parse_mode: "HTML" });
   }
 
-  resetSession(session.chatId);
+  session.phase = "finished"; // keep results so /stats can read them
 }
 
 function chunkText(text: string, max: number): string[] {
@@ -239,9 +239,13 @@ export function startTelegramBot(): void {
         "AI‑generated trivia on any topic.\n\n" +
         "Built with Telegraf + OpenRouter.\n" +
         "by DerYokoya.\n\n" +
-        '<a href="https://github.com/DerYokoya">GitHub Profile</a>\n\n' +
         "Send /quiz to begin!",
-      { parse_mode: "HTML" },
+      {
+        parse_mode: "HTML",
+        ...Markup.inlineKeyboard([
+          Markup.button.url("🌐 GitHub", "https://github.com/DerYokoya"),
+        ]),
+      },
     );
   });
 
