@@ -233,18 +233,17 @@ export function startTelegramBot(): void {
     );
   });
 
-bot.command("about", async (ctx) => {
-  await ctx.reply(
-    "🤖 <b>Trivia Bot</b>\n" +
-      "AI‑generated trivia on any topic.\n\n" +
-      "Built with Telegraf + OpenRouter.\n" +
-      "by DerYokoya.\n\n" +
-      "<a href=\"https://github.com/DerYokoya\">GitHub Profile</a>\n\n" +
-      "Send /quiz to begin!",
-    { parse_mode: "HTML" },
-  );
-});
-
+  bot.command("about", async (ctx) => {
+    await ctx.reply(
+      "🤖 <b>Trivia Bot</b>\n" +
+        "AI‑generated trivia on any topic.\n\n" +
+        "Built with Telegraf + OpenRouter.\n" +
+        "by DerYokoya.\n\n" +
+        '<a href="https://github.com/DerYokoya">GitHub Profile</a>\n\n' +
+        "Send /quiz to begin!",
+      { parse_mode: "HTML" },
+    );
+  });
 
   bot.on("text", async (ctx) => {
     const text = ctx.message.text.trim();
