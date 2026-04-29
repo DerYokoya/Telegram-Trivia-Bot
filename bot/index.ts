@@ -161,6 +161,14 @@ export function startTelegramBot(): void {
 
   const bot = new Telegraf(token);
 
+  bot.telegram.setMyCommands([
+    { command: "quiz", description: "Start a new trivia quiz" },
+    { command: "cancel", description: "Cancel the current quiz" },
+    { command: "help", description: "Show help information" },
+    { command: "stats", description: "Show your quiz stats" },
+    { command: "about", description: "About this bot" },
+  ]);
+
   bot.start(async (ctx) => {
     resetSession(ctx.chat.id);
     await ctx.reply(
@@ -203,6 +211,40 @@ export function startTelegramBot(): void {
         "Examples: 'World War II', 'Greek mythology', 'NBA history', 'Quantum physics'",
     );
   });
+
+  bot.command("stats", async (ctx) => {
+    const session = getSession(ctx.chat.id);
+
+    if (session.results.length === 0) {
+      await ctx.reply("No stats yet — play a quiz first using /quiz!");
+      return;
+    }
+
+    const total = session.results.length;
+    const correct = session.results.filter((r) => r.isCorrect).length;
+    const score = Math.round((correct / total) * 100);
+
+    await ctx.reply(
+      `<b>Your Stats</b>\n\n` +
+        `<b>Total questions answered:</b> ${total}\n` +
+        `<b>Correct:</b> ${correct}\n` +
+        `<b>Score:</b> ${score}%\n`,
+      { parse_mode: "HTML" },
+    );
+  });
+
+bot.command("about", async (ctx) => {
+  await ctx.reply(
+    "🤖 <b>Trivia Bot</b>\n" +
+      "AI‑generated trivia on any topic.\n\n" +
+      "Built with Telegraf + OpenRouter.\n" +
+      "by DerYokoya.\n\n" +
+      "<a href=\"https://github.com/DerYokoya\">GitHub Profile</a>\n\n" +
+      "Send /quiz to begin!",
+    { parse_mode: "HTML" },
+  );
+});
+
 
   bot.on("text", async (ctx) => {
     const text = ctx.message.text.trim();
