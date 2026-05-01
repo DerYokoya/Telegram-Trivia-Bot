@@ -6,7 +6,9 @@ export type QuizPhase =
   | "awaiting_count"
   | "loading"
   | "in_progress"
-  | "finished";
+  | "finished"
+  | "awaiting_nickname"
+  | "awaiting_leaderboard_category";
 
 export interface QuestionResult {
   question: string;
@@ -27,6 +29,8 @@ export interface QuizSession {
   questionStartedAt: number | null;
   quizStartedAt: number | null;
   activeMessageId: number | null;
+  /** Nickname set by the user for leaderboard registration */
+  nickname: string | null;
 }
 
 const sessions = new Map<number, QuizSession>();
@@ -52,6 +56,7 @@ export function createSession(chatId: number): QuizSession {
     questionStartedAt: null,
     quizStartedAt: null,
     activeMessageId: null,
+    nickname: null,
   };
   sessions.set(chatId, fresh);
   return fresh;
