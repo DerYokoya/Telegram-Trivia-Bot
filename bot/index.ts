@@ -112,17 +112,13 @@ function medal(rank: number): string {
 
 // ─── Leaderboard rendering ────────────────────────────────────────────────────
 
-function renderLeaderboard(
-  entries: LeaderboardEntry[],
-  title: string,
-): string {
+function renderLeaderboard(entries: LeaderboardEntry[], title: string): string {
   if (entries.length === 0) {
     return `<b>${escapeHtml(title)}</b>\n\nNo entries yet. Play a quiz to be the first!`;
   }
 
   const rows = entries.map((e, i) => {
-    const pct =
-      e.total > 0 ? Math.round((e.correct / e.total) * 100) : 0;
+    const pct = e.total > 0 ? Math.round((e.correct / e.total) * 100) : 0;
     const speed = formatDuration(e.avgSpeedMs);
     return (
       `${medal(i + 1)} <b>${escapeHtml(e.nickname)}</b>\n` +
@@ -235,10 +231,7 @@ async function finishSoloQuiz(ctx: Context, session: QuizSession) {
 
 // ─── Group quiz helpers ───────────────────────────────────────────────────────
 
-async function sendNextGroupQuestion(
-  ctx: Context,
-  session: GroupQuizSession,
-) {
+async function sendNextGroupQuestion(ctx: Context, session: GroupQuizSession) {
   const q = session.questions[session.currentIndex];
   if (!q) {
     await finishGroupQuiz(ctx, session);
@@ -262,6 +255,7 @@ async function sendNextGroupQuestion(
     ...buildAnswerKeyboard(session.currentIndex, "gans"),
   });
   session.activeMessageId = sent.message_id;
+  session.lastAnswerAttempt.clear();
 }
 
 async function finishGroupQuiz(ctx: Context, session: GroupQuizSession) {
@@ -271,9 +265,7 @@ async function finishGroupQuiz(ctx: Context, session: GroupQuizSession) {
   const total = session.questions.length;
 
   const lines: string[] = [];
-  lines.push(
-    `🏆 <b>Quiz Over — ${escapeHtml(session.topic ?? "Trivia")}</b>`,
-  );
+  lines.push(`🏆 <b>Quiz Over — ${escapeHtml(session.topic ?? "Trivia")}</b>`);
   lines.push("");
 
   if (standings.length === 0) {
@@ -301,8 +293,7 @@ async function finishGroupQuiz(ctx: Context, session: GroupQuizSession) {
       ) {
         rank = i + 1;
       }
-      const avgMs =
-        p.correct > 0 ? p.totalCorrectMs / p.correct : 0;
+      const avgMs = p.correct > 0 ? p.totalCorrectMs / p.correct : 0;
       const pct = total > 0 ? Math.round((p.correct / total) * 100) : 0;
       lines.push(
         `${medal(rank)} <b>${escapeHtml(p.displayName)}</b>` +
@@ -316,14 +307,11 @@ async function finishGroupQuiz(ctx: Context, session: GroupQuizSession) {
     const winners = standings.filter(
       (p) =>
         p.correct === topCorrect &&
-        (topCorrect === 0 ||
-          p.totalCorrectMs / p.correct === topAvg),
+        (topCorrect === 0 || p.totalCorrectMs / p.correct === topAvg),
     );
 
     if (winners.length === 1) {
-      lines.push(
-        `🎉 Winner: <b>${escapeHtml(winners[0]!.displayName)}</b>!`,
-      );
+      lines.push(`🎉 Winner: <b>${escapeHtml(winners[0]!.displayName)}</b>!`);
     } else if (winners.length > 1 && topCorrect > 0) {
       const names = winners.map((w) => escapeHtml(w.displayName)).join(", ");
       lines.push(`🤝 It's a tie between <b>${names}</b>!`);
@@ -471,9 +459,7 @@ export function startTelegramBot(): void {
 
   bot.command("quiz", async (ctx) => {
     if (isGroupChat(ctx)) {
-      await ctx.reply(
-        "For group competitions use /gquiz in this chat!",
-      );
+      await ctx.reply("For group competitions use /gquiz in this chat!");
       return;
     }
     const session = resetSession(ctx.chat!.id);
@@ -534,7 +520,10 @@ export function startTelegramBot(): void {
 
   bot.command("leaderboard", async (ctx) => {
     const entries = getGlobalLeaderboard(10);
-    const text = renderLeaderboard(entries, "🌍 Global Leaderboard — All Topics");
+    const text = renderLeaderboard(
+      entries,
+      "🌍 Global Leaderboard — All Topics",
+    );
     await ctx.reply(text, { parse_mode: "HTML" });
   });
 
@@ -542,7 +531,11 @@ export function startTelegramBot(): void {
 
   bot.command("topleaderboard", async (ctx) => {
     // Extract optional inline argument, e.g. "/topleaderboard science"
-    const args = (ctx.message as any)?.text?.split(/\s+/).slice(1).join(" ").trim();
+    const args = (ctx.message as any)?.text
+      ?.split(/\s+/)
+      .slice(1)
+      .join(" ")
+      .trim();
     if (args && args.length > 0) {
       const entries = getCategoryLeaderboard(args, 10);
       await ctx.reply(
@@ -699,9 +692,7 @@ export function startTelegramBot(): void {
     }
 
     if (session.phase === "in_progress") {
-      await ctx.reply(
-        "Tap one of the answer buttons, or /cancel to stop.",
-      );
+      await ctx.reply("Tap one of the answer buttons, or /cancel to stop.");
       return;
     }
 
@@ -712,53 +703,104 @@ export function startTelegramBot(): void {
 
   // ── Solo count selection ──────────────────────────────────────────────────
 
-  bot.action(/^count:(\d+)$/, async (ctx) => {
-    const count = Number(ctx.match[1]);
+  bot.action(/^gans:(\d+):(\d+)$/, async (ctx) => {
+    const qIndex = Number(ctx.match[1]);
+    const choice = Number(ctx.match[2]);
     const chatId = ctx.chat?.id;
-    if (chatId === undefined) {
+    const from = (ctx as any).from;
+    if (chatId === undefined || !from) {
       await ctx.answerCbQuery();
       return;
     }
-    const session = getSession(chatId);
 
-    if (session.phase !== "awaiting_count" || !session.topic) {
-      await ctx.answerCbQuery("That choice is no longer active.");
+    const session = getGroupSession(chatId, from.id);
+
+    if (session.phase !== "in_progress") {
+      await ctx.answerCbQuery("No quiz is running right now.");
       return;
     }
-    if (!COUNT_OPTIONS.includes(count)) {
-      await ctx.answerCbQuery("Invalid count.");
+    if (qIndex !== session.currentIndex) {
+      await ctx.answerCbQuery("That question is already closed.");
       return;
     }
 
-    await ctx.answerCbQuery(`${count} questions selected`);
-    session.desiredCount = count;
-    session.phase = "loading";
+    const question = session.questions[qIndex];
+    if (!question) {
+      await ctx.answerCbQuery();
+      return;
+    }
 
-    try {
-      await ctx.editMessageText(
-        `Topic: <b>${escapeHtml(session.topic)}</b>\nQuestions: <b>${count}</b>\n\nGenerating…`,
-        { parse_mode: "HTML" },
-      );
-    } catch { /* ignore */ }
+    const elapsed = session.questionStartedAt
+      ? Date.now() - session.questionStartedAt
+      : 0;
 
-    try {
-      const questions = await generateTriviaQuestions(session.topic, count);
-      session.questions = questions;
-      session.currentIndex = 0;
-      session.results = [];
-      session.phase = "in_progress";
-      session.quizStartedAt = Date.now();
-      await ctx.reply(
-        `Ready! ${questions.length} questions on <b>${escapeHtml(session.topic)}</b>. Timer starts now.`,
-        { parse_mode: "HTML" },
+    const displayName = getSenderName(ctx);
+    const { status, cooldownRemainingMs } = registerGroupAnswer(
+      session,
+      from.id,
+      displayName,
+      choice,
+      elapsed,
+    );
+
+    if (status === "on_cooldown") {
+      const secondsLeft = Math.ceil(cooldownRemainingMs! / 1000);
+      await ctx.answerCbQuery(
+        `⏳ You must wait ${secondsLeft}s to try again!`,
+        { show_alert: true },
       );
-      await sendNextSoloQuestion(ctx, session);
-    } catch (err) {
-      console.error("Failed to generate questions:", err);
-      resetSession(chatId);
-      await ctx.reply(
-        "Sorry, couldn't generate questions. Please try /quiz again.",
-      );
+      return;
+    }
+
+    if (status === "question_closed") {
+      await ctx.answerCbQuery("⌛ This question is already closed.");
+      return;
+    }
+
+    if (status === "accepted_correct") {
+      const result = session.results[qIndex]!;
+      const isFirstCorrect = result.winnerId === from.id;
+      if (isFirstCorrect) {
+        await ctx.answerCbQuery(
+          `✅ Correct! First! (${formatDuration(elapsed)})`,
+        );
+      } else {
+        await ctx.answerCbQuery("✅ Correct! (but someone was faster)");
+      }
+    } else {
+      await ctx.answerCbQuery("❌ Wrong answer.");
+    }
+
+    // Close question on first correct answer
+    const result = session.results[qIndex]!;
+    if (result.winnerId !== null) {
+      const correctLetter = LETTERS[question.correctIndex]!;
+      const winnerLine =
+        `✅ <b>${escapeHtml(result.winnerName ?? "")}</b> got it first` +
+        ` in ${formatDuration(result.winnerElapsedMs ?? 0)}!` +
+        ` Answer: <b>${correctLetter}</b>`;
+
+      const updatedText =
+        buildQuestionText(session.questions, qIndex) +
+        `\n\n${winnerLine}` +
+        (question.explanation
+          ? `\n<i>${escapeHtml(question.explanation)}</i>`
+          : "");
+
+      try {
+        await ctx.editMessageText(updatedText, { parse_mode: "HTML" });
+      } catch {
+        /* ignore */
+      }
+
+      await new Promise((r) => setTimeout(r, 1500));
+
+      session.currentIndex += 1;
+      if (session.currentIndex >= session.questions.length) {
+        await finishGroupQuiz(ctx, session);
+      } else {
+        await sendNextGroupQuestion(ctx, session);
+      }
     }
   });
 
@@ -792,7 +834,9 @@ export function startTelegramBot(): void {
         `Topic: <b>${escapeHtml(session.topic)}</b>\nQuestions: <b>${count}</b>\n\nGenerating…`,
         { parse_mode: "HTML" },
       );
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     try {
       const questions = await generateTriviaQuestions(session.topic, count);
@@ -872,7 +916,9 @@ export function startTelegramBot(): void {
 
     try {
       await ctx.editMessageText(updated, { parse_mode: "HTML" });
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     session.currentIndex += 1;
     if (session.currentIndex >= session.questions.length) {
@@ -880,101 +926,6 @@ export function startTelegramBot(): void {
     } else {
       await sendNextSoloQuestion(ctx, session);
     }
-  });
-
-  // ── Group answer ───────────────────────────────────────────────────────────
-
-  bot.action(/^gans:(\d+):(\d+)$/, async (ctx) => {
-    const qIndex = Number(ctx.match[1]);
-    const choice = Number(ctx.match[2]);
-    const chatId = ctx.chat?.id;
-    const from = (ctx as any).from;
-    if (chatId === undefined || !from) {
-      await ctx.answerCbQuery();
-      return;
-    }
-
-    const session = getGroupSession(chatId, from.id);
-
-    if (session.phase !== "in_progress") {
-      await ctx.answerCbQuery("No quiz is running right now.");
-      return;
-    }
-    if (qIndex !== session.currentIndex) {
-      await ctx.answerCbQuery("That question is already closed.");
-      return;
-    }
-
-    const question = session.questions[qIndex];
-    if (!question) {
-      await ctx.answerCbQuery();
-      return;
-    }
-
-    const elapsed = session.questionStartedAt
-      ? Date.now() - session.questionStartedAt
-      : 0;
-
-    const displayName = getSenderName(ctx);
-    const outcome = registerGroupAnswer(
-      session,
-      from.id,
-      displayName,
-      choice,
-      elapsed,
-    );
-
-    if (outcome === "already_answered") {
-      await ctx.answerCbQuery("You already answered this question!");
-      return;
-    }
-
-    if (outcome === "accepted_correct") {
-      const result = session.results[qIndex]!;
-      const isFirstCorrect = result.winnerId === from.id;
-
-      if (isFirstCorrect) {
-        await ctx.answerCbQuery(`✅ Correct! First! (${formatDuration(elapsed)})`);
-      } else {
-        await ctx.answerCbQuery(`✅ Correct! (but someone was faster)`);
-      }
-    } else {
-      await ctx.answerCbQuery("❌ Wrong answer.");
-    }
-
-    // After EVERY answer, check if we should close the question.
-    // Strategy: close immediately on the first correct answer, then move on.
-    const result = session.results[qIndex]!;
-    if (result.winnerId !== null) {
-      // First correct answer received — close the question
-      const correctLetter = LETTERS[question.correctIndex]!;
-      const winnerLine =
-        `✅ <b>${escapeHtml(result.winnerName ?? "")}</b> got it first` +
-        ` in ${formatDuration(result.winnerElapsedMs ?? 0)}!` +
-        ` Answer: <b>${correctLetter}</b>`;
-
-      const updatedText =
-        buildQuestionText(session.questions, qIndex) +
-        `\n\n${winnerLine}` +
-        (question.explanation
-          ? `\n<i>${escapeHtml(question.explanation)}</i>`
-          : "");
-
-      try {
-        await ctx.editMessageText(updatedText, { parse_mode: "HTML" });
-      } catch { /* ignore */ }
-
-      // Brief pause, then next question
-      await new Promise((r) => setTimeout(r, 1500));
-
-      session.currentIndex += 1;
-      if (session.currentIndex >= session.questions.length) {
-        await finishGroupQuiz(ctx, session);
-      } else {
-        await sendNextGroupQuestion(ctx, session);
-      }
-    }
-    // If no correct answer yet, do nothing — other players can still answer
   });
 
   // ── Skip nickname button ───────────────────────────────────────────────────

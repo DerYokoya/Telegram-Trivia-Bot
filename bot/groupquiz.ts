@@ -37,6 +37,7 @@ export type GroupPhase =
   | "finished";
 
 export interface GroupQuizSession {
+  lastAnswerAttempt: Map<number, number>;
   chatId: number;
   phase: GroupPhase;
   topic: string | null;
@@ -74,6 +75,7 @@ function freshSession(chatId: number, hostId: number): GroupQuizSession {
     participants: new Map(),
     results: [],
     hostId,
+    lastAnswerAttempt: new Map(),
   };
 }
 
@@ -123,21 +125,41 @@ export function touchParticipant(
   return p;
 }
 
-/**
- * Try to register an answer.
- * Returns: "accepted_correct" | "accepted_wrong" | "already_answered" | "question_closed"
- */
+// ─── Cooldown ─────────────────────────────────────────────────────────────────
+
+const ANSWER_COOLDOWN_MS = 5000;
+
+export type RegisterGroupAnswerResult =
+  | "accepted_correct"
+  | "accepted_wrong"
+  | "on_cooldown"
+  | "question_closed";
+
 export function registerGroupAnswer(
   session: GroupQuizSession,
   userId: number,
   displayName: string,
   choiceIndex: number,
   elapsedMs: number,
-): "accepted_correct" | "accepted_wrong" | "already_answered" | "question_closed" {
+): { status: RegisterGroupAnswerResult; cooldownRemainingMs?: number } {
   const result = session.results[session.currentIndex];
-  if (!result) return "question_closed";
+  if (!result) return { status: "question_closed" };
 
-  if (result.allAnswers.has(userId)) return "already_answered";
+  const now = Date.now();
+  const lastAttempt = session.lastAnswerAttempt.get(userId);
+
+  if (lastAttempt !== undefined) {
+    const elapsed = now - lastAttempt;
+    if (elapsed < ANSWER_COOLDOWN_MS) {
+      return {
+        status: "on_cooldown",
+        cooldownRemainingMs: ANSWER_COOLDOWN_MS - elapsed,
+      };
+    }
+  }
+
+  // Record attempt time before processing answer
+  session.lastAnswerAttempt.set(userId, now);
 
   result.allAnswers.set(userId, { choiceIndex, elapsedMs });
 
@@ -149,24 +171,20 @@ export function registerGroupAnswer(
   if (isCorrect) {
     p.correct += 1;
     p.totalCorrectMs += elapsedMs;
-
-    // First correct answer wins
     if (result.winnerId === null) {
       result.winnerId = userId;
       result.winnerName = displayName;
       result.winnerElapsedMs = elapsedMs;
     }
-    return "accepted_correct";
+    return { status: "accepted_correct" };
   } else {
     p.wrong += 1;
-    return "accepted_wrong";
+    return { status: "accepted_wrong" };
   }
 }
 
 /** Sorted standings: correct desc → avgSpeed asc → alphabetical */
-export function getStandings(
-  session: GroupQuizSession,
-): GroupParticipant[] {
+export function getStandings(session: GroupQuizSession): GroupParticipant[] {
   const all = [...session.participants.values()];
   return all.sort((a, b) => {
     if (b.correct !== a.correct) return b.correct - a.correct;
