@@ -5,6 +5,7 @@ export interface LeaderboardEntry {
   nickname: string;
   topic: string;
   category: string;
+  difficulty: "easy" | "medium" | "hard" | "random";
   correct: number;
   total: number;
   avgSpeedMs: number;

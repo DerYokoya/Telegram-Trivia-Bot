@@ -110,7 +110,7 @@ function buildDifficultyKeyboard(prefix: "diff" | "gdiff") {
     DIFFICULTY_OPTIONS.map((d) =>
       Markup.button.callback(d, `${prefix}:${d.toLowerCase()}`),
     ),
-    { columns: 4 },
+    { columns: 2 },
   );
 }
 
@@ -145,12 +145,22 @@ function renderLeaderboard(entries: LeaderboardEntry[], title: string): string {
     return `<b>${escapeHtml(title)}</b>\n\nNo entries yet. Play a quiz to be the first!`;
   }
 
+  const diffIcon: Record<string, string> = {
+    easy: "🟢",
+    medium: "🟡",
+    hard: "🔴",
+    random: "🎲",
+  };
+
   const rows = entries.map((e, i) => {
     const pct = e.total > 0 ? Math.round((e.correct / e.total) * 100) : 0;
     const speed = formatDuration(e.avgSpeedMs);
+    const diff = e.difficulty
+      ? ` ${diffIcon[e.difficulty] ?? ""} <i>${e.difficulty}</i>`
+      : "";
     return (
       `${medal(i + 1)} <b>${escapeHtml(e.nickname)}</b>\n` +
-      `   📚 ${escapeHtml(e.topic)}  ·  ✅ ${e.correct}/${e.total} (${pct}%)  ·  ⚡ avg ${speed}`
+      `   📚 ${escapeHtml(e.topic)}${diff}  ·  ✅ ${e.correct}/${e.total} (${pct}%)  ·  ⚡ avg ${speed}`
     );
   });
 
@@ -240,7 +250,9 @@ async function finishSoloQuiz(ctx: Context, session: QuizSession) {
         ? ` ${DIFFICULTY_ICONS[q.difficulty]}`
         : "";
     lines.push("");
-    lines.push(`${mark}${diffBadge} <b>Q${i + 1}.</b> ${escapeHtml(r.question)}`);
+    lines.push(
+      `${mark}${diffBadge} <b>Q${i + 1}.</b> ${escapeHtml(r.question)}`,
+    );
     lines.push(
       `   Your answer: <b>${yourLetter}</b>   Correct: <b>${correctLetter}</b>   Time: ${formatDuration(r.timeMs)}`,
     );
@@ -267,12 +279,7 @@ async function finishSoloQuiz(ctx: Context, session: QuizSession) {
     correctResults.length > 0
       ? correctResults.reduce((s, r) => s + r.timeMs, 0) / correctResults.length
       : avg;
-  const newAchs = recordSoloQuizComplete(
-    session.chatId,
-    correct,
-    total,
-    avg,
-  );
+  const newAchs = recordSoloQuizComplete(session.chatId, correct, total, avg);
   const achMsg = renderNewAchievements(newAchs);
   if (achMsg) await ctx.reply(achMsg, { parse_mode: "HTML" });
 
@@ -449,6 +456,7 @@ async function finishGroupQuiz(ctx: Context, session: GroupQuizSession) {
       nickname: p.displayName,
       topic: session.topic ?? "Trivia",
       category: (session.topic ?? "trivia").toLowerCase().trim(),
+      difficulty: session.difficulty,
       correct: p.correct,
       total,
       avgSpeedMs,
@@ -646,7 +654,10 @@ export function startTelegramBot(): void {
 
   bot.command("leaderboard", async (ctx) => {
     const entries = getGlobalLeaderboard(10);
-    const text = renderLeaderboard(entries, "🌍 Global Leaderboard — All Topics");
+    const text = renderLeaderboard(
+      entries,
+      "🌍 Global Leaderboard — All Topics",
+    );
     await ctx.reply(text, { parse_mode: "HTML" });
   });
 
@@ -779,6 +790,7 @@ export function startTelegramBot(): void {
         nickname: text,
         topic: session.topic ?? "Trivia",
         category: (session.topic ?? "trivia").toLowerCase().trim(),
+        difficulty: session.difficulty,
         correct,
         total,
         avgSpeedMs,
@@ -850,10 +862,10 @@ export function startTelegramBot(): void {
         { parse_mode: "HTML", ...buildDifficultyKeyboard("diff") },
       );
     } catch {
-      await ctx.reply(
-        `Questions: <b>${count}</b>\n\nChoose difficulty:`,
-        { parse_mode: "HTML", ...buildDifficultyKeyboard("diff") },
-      );
+      await ctx.reply(`Questions: <b>${count}</b>\n\nChoose difficulty:`, {
+        parse_mode: "HTML",
+        ...buildDifficultyKeyboard("diff"),
+      });
     }
   });
 
@@ -868,12 +880,19 @@ export function startTelegramBot(): void {
     }
     const session = getSession(chatId);
 
-    if (session.phase !== "awaiting_difficulty" || !session.topic || !session.desiredCount) {
+    if (
+      session.phase !== "awaiting_difficulty" ||
+      !session.topic ||
+      !session.desiredCount
+    ) {
       await ctx.answerCbQuery("That choice is no longer active.");
       return;
     }
 
-    const diffLabel = difficulty === "random" ? "🎲 Random" : `${DIFFICULTY_ICONS[difficulty]} ${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}`;
+    const diffLabel =
+      difficulty === "random"
+        ? "🎲 Random"
+        : `${DIFFICULTY_ICONS[difficulty]} ${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}`;
     await ctx.answerCbQuery(`Difficulty: ${diffLabel}`);
     session.difficulty = difficulty;
     session.phase = "loading";
@@ -939,10 +958,10 @@ export function startTelegramBot(): void {
         { parse_mode: "HTML", ...buildDifficultyKeyboard("gdiff") },
       );
     } catch {
-      await ctx.reply(
-        `Questions: <b>${count}</b>\n\nChoose difficulty:`,
-        { parse_mode: "HTML", ...buildDifficultyKeyboard("gdiff") },
-      );
+      await ctx.reply(`Questions: <b>${count}</b>\n\nChoose difficulty:`, {
+        parse_mode: "HTML",
+        ...buildDifficultyKeyboard("gdiff"),
+      });
     }
   });
 
@@ -958,12 +977,19 @@ export function startTelegramBot(): void {
     }
     const session = getGroupSession(chatId, from.id);
 
-    if (session.phase !== "awaiting_difficulty" || !session.topic || !session.desiredCount) {
+    if (
+      session.phase !== "awaiting_difficulty" ||
+      !session.topic ||
+      !session.desiredCount
+    ) {
       await ctx.answerCbQuery("That choice is no longer active.");
       return;
     }
 
-    const diffLabel = difficulty === "random" ? "🎲 Random" : `${DIFFICULTY_ICONS[difficulty]} ${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}`;
+    const diffLabel =
+      difficulty === "random"
+        ? "🎲 Random"
+        : `${DIFFICULTY_ICONS[difficulty]} ${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}`;
     await ctx.answerCbQuery(`Difficulty: ${diffLabel}`);
     session.difficulty = difficulty;
     session.phase = "loading";
@@ -1137,10 +1163,11 @@ export function startTelegramBot(): void {
         if (newAchs.length > 0) {
           const msg = renderNewAchievements(newAchs);
           if (msg)
-            ctx.reply(
-              `<b>${escapeHtml(displayName)}</b>${msg}`,
-              { parse_mode: "HTML" },
-            ).catch(() => undefined);
+            ctx
+              .reply(`<b>${escapeHtml(displayName)}</b>${msg}`, {
+                parse_mode: "HTML",
+              })
+              .catch(() => undefined);
         }
       }
 
