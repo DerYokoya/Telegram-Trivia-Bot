@@ -701,7 +701,7 @@ export function startTelegramBot(): void {
     }
   });
 
-  // ── Solo count selection ──────────────────────────────────────────────────
+  // ── Group answer ──────────────────────────────────────────────────
 
   bot.action(/^gans:(\d+):(\d+)$/, async (ctx) => {
     const qIndex = Number(ctx.match[1]);
