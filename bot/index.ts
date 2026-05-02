@@ -455,6 +455,59 @@ export function startTelegramBot(): void {
     }
   });
 
+  // ── Simulate click ─────────────────────────────────────────────────────────────
+
+  bot.command("fakeclick", async (ctx) => {
+    const from = (ctx as any).from;
+    const chatId = ctx.chat!.id;
+    const session = getGroupSession(chatId, from.id);
+
+    if (session.phase !== "in_progress") {
+      await ctx.reply("No quiz running.");
+      return;
+    }
+
+    await ctx.reply(
+      "Simulate fake user answer:",
+      Markup.inlineKeyboard(
+        LETTERS.map((letter, i) =>
+          Markup.button.callback(letter, `fakeclick:${i}`),
+        ),
+        { columns: 4 },
+      ),
+    );
+  });
+
+  bot.action(/^fakeclick:(\d+)$/, async (ctx) => {
+    const choice = Number(ctx.match[1]);
+    const chatId = ctx.chat?.id;
+    const from = (ctx as any).from;
+    if (chatId === undefined || !from) {
+      await ctx.answerCbQuery();
+      return;
+    }
+
+    const session = getGroupSession(chatId, from.id);
+    if (session.phase !== "in_progress") {
+      await ctx.answerCbQuery("No quiz running.");
+      return;
+    }
+
+    const fakeUserId = 999999;
+    const elapsed = session.questionStartedAt
+      ? Date.now() - session.questionStartedAt
+      : 1200;
+
+    const result = registerGroupAnswer(
+      session,
+      fakeUserId,
+      "FakeUser",
+      choice,
+      elapsed,
+    );
+    await ctx.answerCbQuery(`FakeUser → ${LETTERS[choice]}: ${result.status}`);
+  });
+
   // ── /quiz (solo) ─────────────────────────────────────────────────────────────
 
   bot.command("quiz", async (ctx) => {
