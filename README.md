@@ -1,4 +1,4 @@
-# Tele Quiz Bot
+# Telegram Trivia Bot
 
 An AI-powered Telegram trivia bot. Ask it for a quiz on any topic, pick your difficulty, and compete with friends on the global leaderboard.
 
