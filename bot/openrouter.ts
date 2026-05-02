@@ -1,30 +1,37 @@
-
-
 const OPENROUTER_API_KEY = process.env["OPENROUTER_API_KEY"];
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
-// Use a free model on OpenRouter — change to any model you prefer
 const MODEL = process.env["OPENROUTER_MODEL"] ?? "openai/gpt-oss-120b:free";
 
-if (!OPENROUTER_API_KEY) {
-  throw new Error(
-    "OPENROUTER_API_KEY environment variable is required but was not provided.",
-  );
-}
+export type QuestionDifficulty = "easy" | "medium" | "hard";
 
 export interface TriviaQuestion {
   question: string;
   options: string[];
   correctIndex: number;
   explanation: string;
+  /** Present only when difficulty is "random" or a fixed difficulty was requested */
+  difficulty?: QuestionDifficulty;
 }
 
 export async function generateTriviaQuestions(
   topic: string,
   count: number,
+  difficulty: "easy" | "medium" | "hard" | "random" = "random",
 ): Promise<TriviaQuestion[]> {
-  console.log("Using model:", MODEL);
+  if (!OPENROUTER_API_KEY) {
+    throw new Error(
+      "OPENROUTER_API_KEY environment variable is required but was not provided.",
+    );
+  }
+
+  const isRandom = difficulty === "random";
+
+  const difficultyInstruction = isRandom
+    ? `Vary the difficulty — include a mix of easy, medium, and hard questions. For each question include a "difficulty" field set to exactly one of: "easy", "medium", or "hard".`
+    : `All questions must be at ${difficulty} difficulty. For each question include a "difficulty" field set to "${difficulty}".`;
+
   const prompt = `Create exactly ${count} multiple-choice trivia questions about "${topic}".
-Mix difficulty (easy, medium, hard).
+${difficultyInstruction}
 Each question must have exactly 4 options and one clearly correct answer.
 Keep questions concise (under 200 chars). Keep options under 80 chars each.
 Provide a one-sentence explanation for the correct answer.
@@ -36,7 +43,8 @@ Respond ONLY with valid JSON in this exact shape, no markdown fences, no comment
       "question": "string",
       "options": ["string", "string", "string", "string"],
       "correctIndex": 0,
-      "explanation": "string"
+      "explanation": "string",
+      "difficulty": "easy"
     }
   ]
 }`;
@@ -44,9 +52,9 @@ Respond ONLY with valid JSON in this exact shape, no markdown fences, no comment
   const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
       "Content-Type": "application/json",
-      "HTTP-Referer": "https://github.com/your-username/tele-quiz-bot",
+      "HTTP-Referer": "https://github.com/DerYokoya/tele-quiz-bot",
       "X-Title": "Telegram Trivia Quiz Bot",
     },
     body: JSON.stringify({
@@ -69,7 +77,7 @@ Respond ONLY with valid JSON in this exact shape, no markdown fences, no comment
     throw new Error(`OpenRouter API error: ${response.status} ${errorText}`);
   }
 
-  const data = await response.json() as {
+  const data = (await response.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
   };
 
@@ -78,8 +86,10 @@ Respond ONLY with valid JSON in this exact shape, no markdown fences, no comment
     throw new Error("Empty response from question generator.");
   }
 
-  // Strip markdown fences if the model ignores instructions
-  content = content.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  content = content
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
 
   let parsed: { questions?: TriviaQuestion[] };
   try {
@@ -103,6 +113,18 @@ Respond ONLY with valid JSON in this exact shape, no markdown fences, no comment
 
   if (valid.length === 0) {
     throw new Error("No valid questions returned by AI.");
+  }
+
+  // Normalise difficulty field
+  const validDifficulties = new Set<string>(["easy", "medium", "hard"]);
+  for (const q of valid) {
+    if (q.difficulty && !validDifficulties.has(q.difficulty)) {
+      delete q.difficulty;
+    }
+    // If a fixed difficulty was set, always stamp it
+    if (!isRandom && !q.difficulty) {
+      q.difficulty = difficulty as QuestionDifficulty;
+    }
   }
 
   return valid.slice(0, count);

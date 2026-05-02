@@ -4,18 +4,14 @@ export interface LeaderboardEntry {
   userId: number;
   nickname: string;
   topic: string;
-  /** Normalised category (lower-cased, trimmed) */
   category: string;
   correct: number;
   total: number;
-  /** Average milliseconds per correct answer across the quiz */
   avgSpeedMs: number;
-  /** Unix timestamp (ms) when the record was set */
   recordedAt: number;
 }
 
 // ─── In-memory store ──────────────────────────────────────────────────────────
-// For production you'd swap this for a database. The API surface stays the same.
 
 const entries: LeaderboardEntry[] = [];
 
@@ -27,23 +23,20 @@ export function recordResult(entry: LeaderboardEntry): void {
 
 // ─── Read ─────────────────────────────────────────────────────────────────────
 
-/** All-topics leaderboard: ranked by correct desc → avgSpeedMs asc. */
+function scoreOf(e: LeaderboardEntry): number {
+  return e.total ? e.correct / e.total : 0;
+}
+
 export function getGlobalLeaderboard(limit = 10): LeaderboardEntry[] {
   return [...entries]
     .sort((a, b) => {
-      const pctA = a.total ? a.correct / a.total : 0;
-      const pctB = b.total ? b.correct / b.total : 0;
-      if (pctB !== pctA) return pctB - pctA;
+      const pctDiff = scoreOf(b) - scoreOf(a);
+      if (pctDiff !== 0) return pctDiff;
       return a.avgSpeedMs - b.avgSpeedMs;
     })
     .slice(0, limit);
 }
 
-/**
- * Category leaderboard.
- * Matches entries whose `category` contains every word in the query
- * (case-insensitive). E.g. query "science" matches "sciences", "science & tech".
- */
 export function getCategoryLeaderboard(
   categoryQuery: string,
   limit = 10,
@@ -59,10 +52,25 @@ export function getCategoryLeaderboard(
 
   return matched
     .sort((a, b) => {
-      const pctA = a.total ? a.correct / a.total : 0;
-      const pctB = b.total ? b.correct / b.total : 0;
-      if (pctB !== pctA) return pctB - pctA;
+      const pctDiff = scoreOf(b) - scoreOf(a);
+      if (pctDiff !== 0) return pctDiff;
       return a.avgSpeedMs - b.avgSpeedMs;
     })
     .slice(0, limit);
+}
+
+/** Returns true if the user appears in the top-N global entries. */
+export function isUserInTopNGlobal(userId: number, n: number): boolean {
+  const top = getGlobalLeaderboard(n);
+  return top.some((e) => e.userId === userId);
+}
+
+/** Returns true if the user is rank 1 in any category. */
+export function isUserTop1InAnyCategory(userId: number): boolean {
+  const categories = new Set(entries.map((e) => e.category));
+  for (const cat of categories) {
+    const top = getCategoryLeaderboard(cat, 1);
+    if (top.length > 0 && top[0]!.userId === userId) return true;
+  }
+  return false;
 }

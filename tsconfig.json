@@ -1,15 +1,13 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "outDir": "dist",
-    "rootDir": ".",
+    "module": "CommonJS",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "resolveJsonModule": true
+    "outDir": "dist",
+    "rootDir": "."
   },
   "include": ["**/*.ts"],
-  "exclude": ["node_modules", "dist", "tele-bot-app"]
+  "exclude": ["node_modules", "dist"]
 }

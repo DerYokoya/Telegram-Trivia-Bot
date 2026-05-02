@@ -4,27 +4,19 @@ import type { TriviaQuestion } from "./openrouter";
 
 export interface GroupParticipant {
   userId: number;
-  /** Display name used in Telegram (first name or username) */
   displayName: string;
   correct: number;
   wrong: number;
-  /** Total elapsed ms across questions where this user answered correctly */
   totalCorrectMs: number;
-  /** Answer times per question (ms), regardless of correctness */
   answerTimesMs: number[];
 }
 
-/**
- * Per-question record of who answered and when.
- * Only the first correct answer is honoured.
- */
 export interface GroupQuestionResult {
   questionIndex: number;
   winnerId: number | null;
   winnerName: string | null;
   winnerElapsedMs: number | null;
   correctIndex: number;
-  /** userId → { choiceIndex, elapsedMs } for everyone who tapped */
   allAnswers: Map<number, { choiceIndex: number; elapsedMs: number }>;
 }
 
@@ -32,6 +24,7 @@ export type GroupPhase =
   | "idle"
   | "awaiting_topic"
   | "awaiting_count"
+  | "awaiting_difficulty"
   | "loading"
   | "in_progress"
   | "finished";
@@ -42,16 +35,14 @@ export interface GroupQuizSession {
   phase: GroupPhase;
   topic: string | null;
   desiredCount: number | null;
+  difficulty: "easy" | "medium" | "hard" | "random";
   questions: TriviaQuestion[];
   currentIndex: number;
-  /** ms timestamp when quiz started */
   quizStartedAt: number | null;
-  /** ms timestamp when current question was sent */
   questionStartedAt: number | null;
   activeMessageId: number | null;
   participants: Map<number, GroupParticipant>;
   results: GroupQuestionResult[];
-  /** userId of whoever initiated the quiz (used for admin commands) */
   hostId: number;
 }
 
@@ -67,6 +58,7 @@ function freshSession(chatId: number, hostId: number): GroupQuizSession {
     phase: "idle",
     topic: null,
     desiredCount: null,
+    difficulty: "random",
     questions: [],
     currentIndex: 0,
     quizStartedAt: null,
@@ -104,7 +96,6 @@ export function hasGroupSession(chatId: number): boolean {
   return sessions.has(chatId);
 }
 
-/** Ensure participant exists; returns the record. */
 export function touchParticipant(
   session: GroupQuizSession,
   userId: number,
@@ -158,9 +149,7 @@ export function registerGroupAnswer(
     }
   }
 
-  // Record attempt time before processing answer
   session.lastAnswerAttempt.set(userId, now);
-
   result.allAnswers.set(userId, { choiceIndex, elapsedMs });
 
   const p = touchParticipant(session, userId, displayName);
@@ -183,7 +172,6 @@ export function registerGroupAnswer(
   }
 }
 
-/** Sorted standings: correct desc → avgSpeed asc → alphabetical */
 export function getStandings(session: GroupQuizSession): GroupParticipant[] {
   const all = [...session.participants.values()];
   return all.sort((a, b) => {

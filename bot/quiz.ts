@@ -4,6 +4,7 @@ export type QuizPhase =
   | "idle"
   | "awaiting_topic"
   | "awaiting_count"
+  | "awaiting_difficulty"
   | "loading"
   | "in_progress"
   | "finished"
@@ -23,13 +24,13 @@ export interface QuizSession {
   phase: QuizPhase;
   topic: string | null;
   desiredCount: number | null;
+  difficulty: "easy" | "medium" | "hard" | "random";
   questions: TriviaQuestion[];
   currentIndex: number;
   results: QuestionResult[];
   questionStartedAt: number | null;
   quizStartedAt: number | null;
   activeMessageId: number | null;
-  /** Nickname set by the user for leaderboard registration */
   nickname: string | null;
 }
 
@@ -50,6 +51,7 @@ export function createSession(chatId: number): QuizSession {
     phase: "idle",
     topic: null,
     desiredCount: null,
+    difficulty: "random",
     questions: [],
     currentIndex: 0,
     results: [],

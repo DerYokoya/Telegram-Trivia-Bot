@@ -18,14 +18,31 @@ import {
   recordResult,
   getGlobalLeaderboard,
   getCategoryLeaderboard,
+  isUserInTopNGlobal,
+  isUserTop1InAnyCategory,
   type LeaderboardEntry,
 } from "./leaderboard";
+import {
+  recordSoloQuizComplete,
+  recordGroupQuizParticipation,
+  recordFirstQ1Correct,
+  recordLeaderboardPosition,
+  renderAchievements,
+  renderNewAchievements,
+} from "./achievements";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const lifetimeStats = new Map<number, { total: number; correct: number }>();
 const COUNT_OPTIONS = [5, 10, 15, 20];
+const DIFFICULTY_OPTIONS = ["Easy", "Medium", "Hard", "Random"] as const;
 const LETTERS = ["A", "B", "C", "D"];
+
+const DIFFICULTY_ICONS: Record<string, string> = {
+  easy: "🟢",
+  medium: "🟡",
+  hard: "🔴",
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -52,18 +69,22 @@ function getSenderName(ctx: Context): string {
 }
 
 function buildQuestionText(
-  questions: { question: string; options: string[] }[],
+  questions: { question: string; options: string[]; difficulty?: string }[],
   idx: number,
 ): string {
   const total = questions.length;
   const q = questions[idx];
   if (!q) return "";
   const header = `<b>Question ${idx + 1} of ${total}</b>`;
+  const diffBadge =
+    q.difficulty && DIFFICULTY_ICONS[q.difficulty]
+      ? ` ${DIFFICULTY_ICONS[q.difficulty]} <i>${q.difficulty.charAt(0).toUpperCase() + q.difficulty.slice(1)}</i>`
+      : "";
   const body = escapeHtml(q.question);
   const options = q.options
     .map((opt, i) => `<b>${LETTERS[i]}.</b> ${escapeHtml(opt)}`)
     .join("\n");
-  return `${header}\n\n${body}\n\n${options}`;
+  return `${header}${diffBadge}\n\n${body}\n\n${options}`;
 }
 
 function buildAnswerKeyboard(questionIndex: number, prefix: "ans" | "gans") {
@@ -79,6 +100,15 @@ function buildCountKeyboard(prefix: "count" | "gcount") {
   return Markup.inlineKeyboard(
     COUNT_OPTIONS.map((n) =>
       Markup.button.callback(String(n), `${prefix}:${n}`),
+    ),
+    { columns: 4 },
+  );
+}
+
+function buildDifficultyKeyboard(prefix: "diff" | "gdiff") {
+  return Markup.inlineKeyboard(
+    DIFFICULTY_OPTIONS.map((d) =>
+      Markup.button.callback(d, `${prefix}:${d.toLowerCase()}`),
     ),
     { columns: 4 },
   );
@@ -100,8 +130,6 @@ function chunkText(text: string, max: number): string[] {
   if (buf) out.push(buf);
   return out;
 }
-
-// ─── Medal helpers ────────────────────────────────────────────────────────────
 
 function medal(rank: number): string {
   if (rank === 1) return "🥇";
@@ -127,6 +155,19 @@ function renderLeaderboard(entries: LeaderboardEntry[], title: string): string {
   });
 
   return `<b>${escapeHtml(title)}</b>\n\n${rows.join("\n\n")}`;
+}
+
+// ─── Achievement check + announce ────────────────────────────────────────────
+
+async function checkAndAnnounceLeaderboardAchievements(
+  ctx: Context,
+  userId: number,
+): Promise<void> {
+  const isTop5 = isUserInTopNGlobal(userId, 5);
+  const isTop1Cat = isUserTop1InAnyCategory(userId);
+  const newAchs = recordLeaderboardPosition(userId, isTop5, isTop1Cat);
+  const msg = renderNewAchievements(newAchs);
+  if (msg) await ctx.reply(msg, { parse_mode: "HTML" });
 }
 
 // ─── Solo quiz helpers ────────────────────────────────────────────────────────
@@ -193,8 +234,13 @@ async function finishSoloQuiz(ctx: Context, session: QuizSession) {
     const correctLetter = LETTERS[r.correctIndex];
     const yourLetter =
       r.selectedIndex !== null ? LETTERS[r.selectedIndex] : "—";
+    const q = session.questions[i];
+    const diffBadge =
+      q?.difficulty && DIFFICULTY_ICONS[q.difficulty]
+        ? ` ${DIFFICULTY_ICONS[q.difficulty]}`
+        : "";
     lines.push("");
-    lines.push(`${mark} <b>Q${i + 1}.</b> ${escapeHtml(r.question)}`);
+    lines.push(`${mark}${diffBadge} <b>Q${i + 1}.</b> ${escapeHtml(r.question)}`);
     lines.push(
       `   Your answer: <b>${yourLetter}</b>   Correct: <b>${correctLetter}</b>   Time: ${formatDuration(r.timeMs)}`,
     );
@@ -215,7 +261,22 @@ async function finishSoloQuiz(ctx: Context, session: QuizSession) {
   stats.correct += correct;
   lifetimeStats.set(session.chatId, stats);
 
-  // Prompt for nickname to register on leaderboard
+  // Achievements
+  const correctResults = session.results.filter((r) => r.isCorrect);
+  const avgCorrectSpeedMs =
+    correctResults.length > 0
+      ? correctResults.reduce((s, r) => s + r.timeMs, 0) / correctResults.length
+      : avg;
+  const newAchs = recordSoloQuizComplete(
+    session.chatId,
+    correct,
+    total,
+    avg,
+  );
+  const achMsg = renderNewAchievements(newAchs);
+  if (achMsg) await ctx.reply(achMsg, { parse_mode: "HTML" });
+
+  // Prompt nickname for leaderboard
   session.phase = "awaiting_nickname";
   await ctx.reply(
     "🏆 <b>Want to save your result to the leaderboard?</b>\n\n" +
@@ -227,6 +288,8 @@ async function finishSoloQuiz(ctx: Context, session: QuizSession) {
       ]),
     },
   );
+
+  void avgCorrectSpeedMs; // used above
 }
 
 // ─── Group quiz helpers ───────────────────────────────────────────────────────
@@ -238,7 +301,6 @@ async function sendNextGroupQuestion(ctx: Context, session: GroupQuizSession) {
     return;
   }
 
-  // Initialise the result slot BEFORE sending (so answers can be registered)
   session.results[session.currentIndex] = {
     questionIndex: session.currentIndex,
     winnerId: null,
@@ -271,7 +333,6 @@ async function finishGroupQuiz(ctx: Context, session: GroupQuizSession) {
   if (standings.length === 0) {
     lines.push("Nobody answered. Better luck next time!");
   } else {
-    // Determine ties at the top
     const topCorrect = standings[0]!.correct;
     const topAvg =
       standings[0]!.correct > 0
@@ -302,7 +363,6 @@ async function finishGroupQuiz(ctx: Context, session: GroupQuizSession) {
       );
     }
 
-    // Winners announcement
     lines.push("");
     const winners = standings.filter(
       (p) =>
@@ -324,15 +384,19 @@ async function finishGroupQuiz(ctx: Context, session: GroupQuizSession) {
     const q = session.questions[i];
     if (!q) return;
     const correctLetter = LETTERS[r.correctIndex]!;
+    const diffBadge =
+      q.difficulty && DIFFICULTY_ICONS[q.difficulty]
+        ? ` ${DIFFICULTY_ICONS[q.difficulty]}`
+        : "";
     if (r.winnerId !== null) {
       lines.push(
-        `  Q${i + 1}: 🏅 <b>${escapeHtml(r.winnerName ?? "")}</b>` +
+        `  Q${i + 1}${diffBadge}: 🏅 <b>${escapeHtml(r.winnerName ?? "")}</b>` +
           ` (${formatDuration(r.winnerElapsedMs ?? 0)})` +
           ` — Answer: <b>${correctLetter}</b>`,
       );
     } else {
       lines.push(
-        `  Q${i + 1}: No correct answer — Answer: <b>${correctLetter}</b>`,
+        `  Q${i + 1}${diffBadge}: No correct answer — Answer: <b>${correctLetter}</b>`,
       );
     }
     if (q.explanation) lines.push(`       <i>${escapeHtml(q.explanation)}</i>`);
@@ -345,10 +409,41 @@ async function finishGroupQuiz(ctx: Context, session: GroupQuizSession) {
     await ctx.reply(chunk, { parse_mode: "HTML" });
   }
 
-  // Auto-record top participants to global leaderboard using their Telegram display name
+  // Determine winner userId for achievement purposes
+  const winnerIds = new Set<number>();
+  if (standings.length > 0) {
+    const topCorrect = standings[0]!.correct;
+    const topAvg =
+      standings[0]!.correct > 0
+        ? standings[0]!.totalCorrectMs / standings[0]!.correct
+        : Infinity;
+    for (const p of standings) {
+      if (
+        p.correct === topCorrect &&
+        (topCorrect === 0 || p.totalCorrectMs / p.correct === topAvg)
+      ) {
+        winnerIds.add(p.userId);
+      } else {
+        break;
+      }
+    }
+  }
+
+  // Achievements + leaderboard for all participants
+  const allNewAchs = new Map<number, string[]>();
   for (const p of standings) {
     if (p.correct === 0) continue;
     const avgSpeedMs = p.totalCorrectMs / p.correct;
+    const isWinner = winnerIds.has(p.userId);
+    const newAchs = recordGroupQuizParticipation(
+      p.userId,
+      isWinner,
+      p.correct,
+      total,
+      avgSpeedMs,
+    );
+    if (newAchs.length > 0) allNewAchs.set(p.userId, newAchs);
+
     recordResult({
       userId: p.userId,
       nickname: p.displayName,
@@ -359,6 +454,18 @@ async function finishGroupQuiz(ctx: Context, session: GroupQuizSession) {
       avgSpeedMs,
       recordedAt: Date.now(),
     });
+
+    await checkAndAnnounceLeaderboardAchievements(ctx, p.userId);
+  }
+
+  // Announce newly unlocked achievements
+  if (allNewAchs.size > 0) {
+    const achLines: string[] = ["🎉 <b>Achievements unlocked!</b>"];
+    for (const [, ids] of allNewAchs) {
+      const msg = renderNewAchievements(ids);
+      if (msg) achLines.push(msg);
+    }
+    await ctx.reply(achLines.join("\n"), { parse_mode: "HTML" });
   }
 }
 
@@ -377,6 +484,7 @@ export function startTelegramBot(): void {
     { command: "quiz", description: "Start a solo trivia quiz" },
     { command: "gquiz", description: "Start a group trivia quiz" },
     { command: "cancel", description: "Cancel the current quiz" },
+    { command: "achievements", description: "View your achievements" },
     { command: "leaderboard", description: "Global all-topics leaderboard" },
     { command: "topleaderboard", description: "Leaderboard for a topic" },
     { command: "stats", description: "Your personal quiz stats" },
@@ -394,6 +502,7 @@ export function startTelegramBot(): void {
         "<b>Solo:</b> /quiz\n" +
         "<b>Group competition:</b> /gquiz  (use in a group chat)\n\n" +
         "Other commands:\n" +
+        "/achievements — your achievement badges\n" +
         "/leaderboard — global leaderboard\n" +
         "/topleaderboard — leaderboard by topic/category\n" +
         "/stats — your personal stats\n" +
@@ -411,14 +520,19 @@ export function startTelegramBot(): void {
         "1. Send /quiz\n" +
         "2. Enter a topic\n" +
         "3. Choose question count\n" +
-        "4. Tap your answer\n" +
-        "5. Get a full recap + option to save to leaderboard\n\n" +
+        "4. Choose difficulty (Easy / Medium / Hard / Random)\n" +
+        "5. Tap your answer\n" +
+        "6. Get a full recap + option to save to leaderboard\n\n" +
         "<b>Group (/gquiz)</b> — use in a group/supergroup\n" +
         "1. Send /gquiz\n" +
         "2. Anyone (or the host) enters the topic\n" +
-        "3. Choose question count\n" +
+        "3. Choose question count & difficulty\n" +
         "4. First correct tap wins each question\n" +
         "5. Leaderboard shown at the end\n\n" +
+        "<b>Difficulty</b>\n" +
+        "🟢 Easy  🟡 Medium  🔴 Hard  🎲 Random (AI assigns per question)\n\n" +
+        "<b>Achievements</b>\n" +
+        "/achievements — see all your unlocked badges\n\n" +
         "<b>Leaderboards</b>\n" +
         "/leaderboard — top 10 all-time across all topics\n" +
         "/topleaderboard — top 10 for a specific category\n\n" +
@@ -455,57 +569,16 @@ export function startTelegramBot(): void {
     }
   });
 
-  // ── Simulate click ─────────────────────────────────────────────────────────────
+  // ── /achievements ────────────────────────────────────────────────────────────
 
-  bot.command("fakeclick", async (ctx) => {
-    const from = (ctx as any).from;
-    const chatId = ctx.chat!.id;
-    const session = getGroupSession(chatId, from.id);
-
-    if (session.phase !== "in_progress") {
-      await ctx.reply("No quiz running.");
-      return;
+  bot.command("achievements", async (ctx) => {
+    const userId = isGroupChat(ctx)
+      ? ((ctx as any).from?.id ?? ctx.chat!.id)
+      : ctx.chat!.id;
+    const text = renderAchievements(userId);
+    for (const chunk of chunkText(text, 3500)) {
+      await ctx.reply(chunk, { parse_mode: "HTML" });
     }
-
-    await ctx.reply(
-      "Simulate fake user answer:",
-      Markup.inlineKeyboard(
-        LETTERS.map((letter, i) =>
-          Markup.button.callback(letter, `fakeclick:${i}`),
-        ),
-        { columns: 4 },
-      ),
-    );
-  });
-
-  bot.action(/^fakeclick:(\d+)$/, async (ctx) => {
-    const choice = Number(ctx.match[1]);
-    const chatId = ctx.chat?.id;
-    const from = (ctx as any).from;
-    if (chatId === undefined || !from) {
-      await ctx.answerCbQuery();
-      return;
-    }
-
-    const session = getGroupSession(chatId, from.id);
-    if (session.phase !== "in_progress") {
-      await ctx.answerCbQuery("No quiz running.");
-      return;
-    }
-
-    const fakeUserId = 999999;
-    const elapsed = session.questionStartedAt
-      ? Date.now() - session.questionStartedAt
-      : 1200;
-
-    const result = registerGroupAnswer(
-      session,
-      fakeUserId,
-      "FakeUser",
-      choice,
-      elapsed,
-    );
-    await ctx.answerCbQuery(`FakeUser → ${LETTERS[choice]}: ${result.status}`);
   });
 
   // ── /quiz (solo) ─────────────────────────────────────────────────────────────
@@ -573,17 +646,13 @@ export function startTelegramBot(): void {
 
   bot.command("leaderboard", async (ctx) => {
     const entries = getGlobalLeaderboard(10);
-    const text = renderLeaderboard(
-      entries,
-      "🌍 Global Leaderboard — All Topics",
-    );
+    const text = renderLeaderboard(entries, "🌍 Global Leaderboard — All Topics");
     await ctx.reply(text, { parse_mode: "HTML" });
   });
 
   // ── /topleaderboard ───────────────────────────────────────────────────────────
 
   bot.command("topleaderboard", async (ctx) => {
-    // Extract optional inline argument, e.g. "/topleaderboard science"
     const args = (ctx.message as any)?.text
       ?.split(/\s+/)
       .slice(1)
@@ -596,7 +665,6 @@ export function startTelegramBot(): void {
         { parse_mode: "HTML" },
       );
     } else {
-      // Ask them to type a category
       const session = getSession(ctx.chat!.id);
       session.phase = "awaiting_leaderboard_category";
       await ctx.reply(
@@ -668,8 +736,6 @@ export function startTelegramBot(): void {
           `Topic: <b>${escapeHtml(text)}</b>\n\nHow many questions?`,
           { parse_mode: "HTML", ...buildCountKeyboard("gcount") },
         );
-      } else if (session.phase === "in_progress") {
-        // Silently ignore free text during quiz
       }
       return;
     }
@@ -677,7 +743,6 @@ export function startTelegramBot(): void {
     // ── Solo chat text flow ───────────────────────────────────────────────────
     const session = getSession(chatId);
 
-    // Leaderboard category query
     if (session.phase === "awaiting_leaderboard_category") {
       if (text.length < 1 || text.length > 60) {
         await ctx.reply("Please enter a category name (1–60 chars).");
@@ -692,7 +757,6 @@ export function startTelegramBot(): void {
       return;
     }
 
-    // Nickname after solo quiz
     if (session.phase === "awaiting_nickname") {
       if (text.length < 1 || text.length > 24) {
         await ctx.reply(
@@ -720,6 +784,8 @@ export function startTelegramBot(): void {
         avgSpeedMs,
         recordedAt: Date.now(),
       });
+
+      await checkAndAnnounceLeaderboardAchievements(ctx, chatId);
 
       session.phase = "idle";
       await ctx.reply(
@@ -754,106 +820,91 @@ export function startTelegramBot(): void {
     }
   });
 
-  // ── Group answer ──────────────────────────────────────────────────
+  // ── Solo count selection ──────────────────────────────────────────────────
 
-  bot.action(/^gans:(\d+):(\d+)$/, async (ctx) => {
-    const qIndex = Number(ctx.match[1]);
-    const choice = Number(ctx.match[2]);
+  bot.action(/^count:(\d+)$/, async (ctx) => {
+    const count = Number(ctx.match[1]);
     const chatId = ctx.chat?.id;
-    const from = (ctx as any).from;
-    if (chatId === undefined || !from) {
+    if (chatId === undefined) {
       await ctx.answerCbQuery();
       return;
     }
+    const session = getSession(chatId);
 
-    const session = getGroupSession(chatId, from.id);
-
-    if (session.phase !== "in_progress") {
-      await ctx.answerCbQuery("No quiz is running right now.");
+    if (session.phase !== "awaiting_count" || !session.topic) {
+      await ctx.answerCbQuery("That choice is no longer active.");
       return;
     }
-    if (qIndex !== session.currentIndex) {
-      await ctx.answerCbQuery("That question is already closed.");
-      return;
-    }
-
-    const question = session.questions[qIndex];
-    if (!question) {
-      await ctx.answerCbQuery();
+    if (!COUNT_OPTIONS.includes(count)) {
+      await ctx.answerCbQuery("Invalid count.");
       return;
     }
 
-    const elapsed = session.questionStartedAt
-      ? Date.now() - session.questionStartedAt
-      : 0;
+    await ctx.answerCbQuery(`${count} questions selected`);
+    session.desiredCount = count;
+    session.phase = "awaiting_difficulty";
 
-    const displayName = getSenderName(ctx);
-    const { status, cooldownRemainingMs } = registerGroupAnswer(
-      session,
-      from.id,
-      displayName,
-      choice,
-      elapsed,
-    );
-
-    if (status === "on_cooldown") {
-      const secondsLeft = Math.ceil(cooldownRemainingMs! / 1000);
-      await ctx.answerCbQuery(
-        `⏳ You must wait ${secondsLeft}s to try again!`,
-        { show_alert: true },
+    try {
+      await ctx.editMessageText(
+        `Topic: <b>${escapeHtml(session.topic)}</b>\nQuestions: <b>${count}</b>\n\nChoose difficulty:`,
+        { parse_mode: "HTML", ...buildDifficultyKeyboard("diff") },
       );
+    } catch {
+      await ctx.reply(
+        `Questions: <b>${count}</b>\n\nChoose difficulty:`,
+        { parse_mode: "HTML", ...buildDifficultyKeyboard("diff") },
+      );
+    }
+  });
+
+  // ── Solo difficulty selection ─────────────────────────────────────────────
+
+  bot.action(/^diff:(easy|medium|hard|random)$/, async (ctx) => {
+    const difficulty = ctx.match[1] as "easy" | "medium" | "hard" | "random";
+    const chatId = ctx.chat?.id;
+    if (chatId === undefined) {
+      await ctx.answerCbQuery();
+      return;
+    }
+    const session = getSession(chatId);
+
+    if (session.phase !== "awaiting_difficulty" || !session.topic || !session.desiredCount) {
+      await ctx.answerCbQuery("That choice is no longer active.");
       return;
     }
 
-    if (status === "question_closed") {
-      await ctx.answerCbQuery("⌛ This question is already closed.");
-      return;
+    const diffLabel = difficulty === "random" ? "🎲 Random" : `${DIFFICULTY_ICONS[difficulty]} ${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}`;
+    await ctx.answerCbQuery(`Difficulty: ${diffLabel}`);
+    session.difficulty = difficulty;
+    session.phase = "loading";
+
+    try {
+      await ctx.editMessageText(
+        `Topic: <b>${escapeHtml(session.topic)}</b>\nQuestions: <b>${session.desiredCount}</b>\nDifficulty: <b>${diffLabel}</b>\n\nGenerating…`,
+        { parse_mode: "HTML" },
+      );
+    } catch {
+      /* ignore */
     }
 
-    if (status === "accepted_correct") {
-      const result = session.results[qIndex]!;
-      const isFirstCorrect = result.winnerId === from.id;
-      if (isFirstCorrect) {
-        await ctx.answerCbQuery(
-          `✅ Correct! First! (${formatDuration(elapsed)})`,
-        );
-      } else {
-        await ctx.answerCbQuery("✅ Correct! (but someone was faster)");
-      }
-    } else {
-      await ctx.answerCbQuery("❌ Wrong answer.");
-    }
-
-    // Close question on first correct answer
-    const result = session.results[qIndex]!;
-    if (result.winnerId !== null) {
-      const correctLetter = LETTERS[question.correctIndex]!;
-      const winnerLine =
-        `✅ <b>${escapeHtml(result.winnerName ?? "")}</b> got it first` +
-        ` in ${formatDuration(result.winnerElapsedMs ?? 0)}!` +
-        ` Answer: <b>${correctLetter}</b>`;
-
-      const updatedText =
-        buildQuestionText(session.questions, qIndex) +
-        `\n\n${winnerLine}` +
-        (question.explanation
-          ? `\n<i>${escapeHtml(question.explanation)}</i>`
-          : "");
-
-      try {
-        await ctx.editMessageText(updatedText, { parse_mode: "HTML" });
-      } catch {
-        /* ignore */
-      }
-
-      await new Promise((r) => setTimeout(r, 1500));
-
-      session.currentIndex += 1;
-      if (session.currentIndex >= session.questions.length) {
-        await finishGroupQuiz(ctx, session);
-      } else {
-        await sendNextGroupQuestion(ctx, session);
-      }
+    try {
+      const questions = await generateTriviaQuestions(
+        session.topic,
+        session.desiredCount,
+        session.difficulty,
+      );
+      session.questions = questions;
+      session.currentIndex = 0;
+      session.results = [];
+      session.phase = "in_progress";
+      session.quizStartedAt = Date.now();
+      await sendNextSoloQuestion(ctx, session);
+    } catch (err) {
+      console.error("Failed to generate solo questions:", err);
+      resetSession(chatId);
+      await ctx.reply(
+        "Sorry, couldn't generate questions. Please try /quiz again.",
+      );
     }
   });
 
@@ -880,11 +931,46 @@ export function startTelegramBot(): void {
 
     await ctx.answerCbQuery(`${count} questions selected`);
     session.desiredCount = count;
+    session.phase = "awaiting_difficulty";
+
+    try {
+      await ctx.editMessageText(
+        `Topic: <b>${escapeHtml(session.topic)}</b>\nQuestions: <b>${count}</b>\n\nChoose difficulty:`,
+        { parse_mode: "HTML", ...buildDifficultyKeyboard("gdiff") },
+      );
+    } catch {
+      await ctx.reply(
+        `Questions: <b>${count}</b>\n\nChoose difficulty:`,
+        { parse_mode: "HTML", ...buildDifficultyKeyboard("gdiff") },
+      );
+    }
+  });
+
+  // ── Group difficulty selection ─────────────────────────────────────────────
+
+  bot.action(/^gdiff:(easy|medium|hard|random)$/, async (ctx) => {
+    const difficulty = ctx.match[1] as "easy" | "medium" | "hard" | "random";
+    const chatId = ctx.chat?.id;
+    const from = (ctx as any).from;
+    if (chatId === undefined || !from) {
+      await ctx.answerCbQuery();
+      return;
+    }
+    const session = getGroupSession(chatId, from.id);
+
+    if (session.phase !== "awaiting_difficulty" || !session.topic || !session.desiredCount) {
+      await ctx.answerCbQuery("That choice is no longer active.");
+      return;
+    }
+
+    const diffLabel = difficulty === "random" ? "🎲 Random" : `${DIFFICULTY_ICONS[difficulty]} ${difficulty.charAt(0).toUpperCase() + difficulty.slice(1)}`;
+    await ctx.answerCbQuery(`Difficulty: ${diffLabel}`);
+    session.difficulty = difficulty;
     session.phase = "loading";
 
     try {
       await ctx.editMessageText(
-        `Topic: <b>${escapeHtml(session.topic)}</b>\nQuestions: <b>${count}</b>\n\nGenerating…`,
+        `Topic: <b>${escapeHtml(session.topic)}</b>\nQuestions: <b>${session.desiredCount}</b>\nDifficulty: <b>${diffLabel}</b>\n\nGenerating…`,
         { parse_mode: "HTML" },
       );
     } catch {
@@ -892,14 +978,18 @@ export function startTelegramBot(): void {
     }
 
     try {
-      const questions = await generateTriviaQuestions(session.topic, count);
+      const questions = await generateTriviaQuestions(
+        session.topic,
+        session.desiredCount,
+        session.difficulty,
+      );
       session.questions = questions;
       session.currentIndex = 0;
       session.results = [];
       session.phase = "in_progress";
       session.quizStartedAt = Date.now();
       await ctx.reply(
-        `🎮 <b>Quiz starting!</b> ${questions.length} questions on <b>${escapeHtml(session.topic)}</b>.\n` +
+        `🎮 <b>Quiz starting!</b> ${questions.length} questions on <b>${escapeHtml(session.topic)}</b> · <b>${diffLabel}</b>\n` +
           "First correct tap wins each question! Timer starts now.",
         { parse_mode: "HTML" },
       );
@@ -981,6 +1071,123 @@ export function startTelegramBot(): void {
     }
   });
 
+  // ── Group answer ──────────────────────────────────────────────────────────
+
+  bot.action(/^gans:(\d+):(\d+)$/, async (ctx) => {
+    const qIndex = Number(ctx.match[1]);
+    const choice = Number(ctx.match[2]);
+    const chatId = ctx.chat?.id;
+    const from = (ctx as any).from;
+    if (chatId === undefined || !from) {
+      await ctx.answerCbQuery();
+      return;
+    }
+
+    const session = getGroupSession(chatId, from.id);
+
+    if (session.phase !== "in_progress") {
+      await ctx.answerCbQuery("No quiz is running right now.");
+      return;
+    }
+    if (qIndex !== session.currentIndex) {
+      await ctx.answerCbQuery("That question is already closed.");
+      return;
+    }
+
+    const question = session.questions[qIndex];
+    if (!question) {
+      await ctx.answerCbQuery();
+      return;
+    }
+
+    const elapsed = session.questionStartedAt
+      ? Date.now() - session.questionStartedAt
+      : 0;
+
+    const displayName = getSenderName(ctx);
+    const { status, cooldownRemainingMs } = registerGroupAnswer(
+      session,
+      from.id,
+      displayName,
+      choice,
+      elapsed,
+    );
+
+    if (status === "on_cooldown") {
+      const secondsLeft = Math.ceil(cooldownRemainingMs! / 1000);
+      await ctx.answerCbQuery(
+        `⏳ You must wait ${secondsLeft}s to try again!`,
+        { show_alert: true },
+      );
+      return;
+    }
+
+    if (status === "question_closed") {
+      await ctx.answerCbQuery("⌛ This question is already closed.");
+      return;
+    }
+
+    if (status === "accepted_correct") {
+      const result = session.results[qIndex]!;
+      const isFirstCorrect = result.winnerId === from.id;
+
+      // Achievement: first correct on Q1
+      if (isFirstCorrect && qIndex === 0) {
+        const newAchs = recordFirstQ1Correct(from.id);
+        if (newAchs.length > 0) {
+          const msg = renderNewAchievements(newAchs);
+          if (msg)
+            ctx.reply(
+              `<b>${escapeHtml(displayName)}</b>${msg}`,
+              { parse_mode: "HTML" },
+            ).catch(() => undefined);
+        }
+      }
+
+      if (isFirstCorrect) {
+        await ctx.answerCbQuery(
+          `✅ Correct! First! (${formatDuration(elapsed)})`,
+        );
+      } else {
+        await ctx.answerCbQuery("✅ Correct! (but someone was faster)");
+      }
+    } else {
+      await ctx.answerCbQuery("❌ Wrong answer.");
+    }
+
+    // Close question on first correct answer
+    const result = session.results[qIndex]!;
+    if (result.winnerId !== null) {
+      const correctLetter = LETTERS[question.correctIndex]!;
+      const winnerLine =
+        `✅ <b>${escapeHtml(result.winnerName ?? "")}</b> got it first` +
+        ` in ${formatDuration(result.winnerElapsedMs ?? 0)}!` +
+        ` Answer: <b>${correctLetter}</b>`;
+
+      const updatedText =
+        buildQuestionText(session.questions, qIndex) +
+        `\n\n${winnerLine}` +
+        (question.explanation
+          ? `\n<i>${escapeHtml(question.explanation)}</i>`
+          : "");
+
+      try {
+        await ctx.editMessageText(updatedText, { parse_mode: "HTML" });
+      } catch {
+        /* ignore */
+      }
+
+      await new Promise((r) => setTimeout(r, 1500));
+
+      session.currentIndex += 1;
+      if (session.currentIndex >= session.questions.length) {
+        await finishGroupQuiz(ctx, session);
+      } else {
+        await sendNextGroupQuestion(ctx, session);
+      }
+    }
+  });
+
   // ── Skip nickname button ───────────────────────────────────────────────────
 
   bot.action("skip_nickname", async (ctx) => {
@@ -1008,7 +1215,7 @@ export function startTelegramBot(): void {
   // ── Error handler ──────────────────────────────────────────────────────────
 
   bot.catch((err, ctx) => {
-    console.error("Telegraf error:", err, ctx.update);
+    console.error("Telegraf error:", err, (ctx as any).update);
   });
 
   bot.launch().catch((err) => {
