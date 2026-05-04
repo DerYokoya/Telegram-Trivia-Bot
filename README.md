@@ -2,6 +2,27 @@
 
 An AI-powered Telegram trivia bot. Ask it for a quiz on any topic, pick your difficulty, and compete with friends on the global leaderboard.
 
+## Screenshots
+
+<div align="center">
+  <table>
+    <tr>
+      <td align="center">
+        <img width="250" alt="Tele-Bot-1" src="https://github.com/user-attachments/assets/7d8f43fc-5c17-448d-8acb-d28b82135b4d" /><br />
+        <sub><b>Interface preview (Start)</b></sub>
+      </td>
+      <td align="center">
+        <img width="250" alt="Tele-Bot-2" src="https://github.com/user-attachments/assets/2ecf3a83-f619-4d10-8e82-922c7f5db2e5" /><br />
+        <sub><b>Questions</b></sub>
+      </td>
+      <td align="center">
+        <img width="250" alt="Tele-Bot-3" src="https://github.com/user-attachments/assets/8bed2dd0-743a-4f56-acdb-3d09f701f7f2" /><br />
+        <sub><b>Achievements</b></sub>
+      </td>
+    </tr>
+  </table>
+</div>
+
 ## How it works
 
 The bot uses [OpenRouter](https://openrouter.ai) to generate fresh trivia questions on demand.
