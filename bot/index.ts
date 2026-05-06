@@ -1,6 +1,6 @@
 import { Telegraf, Markup } from "telegraf";
 import type { Context } from "telegraf";
-import { generateTriviaQuestions } from "./openrouter";
+import { fetchValidatedTriviaQuestions } from "./triviaService";
 import {
   getSession,
   resetSession,
@@ -15,6 +15,7 @@ import {
   type GroupQuizSession,
 } from "./groupquiz";
 import {
+  initLeaderboardStore,
   recordResult,
   getGlobalLeaderboard,
   getCategoryLeaderboard,
@@ -43,6 +44,28 @@ const DIFFICULTY_ICONS: Record<string, string> = {
   medium: "🟡",
   hard: "🔴",
 };
+
+const QUIZ_COOLDOWN_MS = 30_000;
+const recentQuizRequests = new Map<number, number>();
+
+function getRequesterId(ctx: Context): number | null {
+  const from = (ctx as any).from;
+  if (from && typeof from.id === "number") return from.id;
+  return ctx.chat?.id ?? null;
+}
+
+function getCooldownRemainingMs(userId: number): number {
+  const last = recentQuizRequests.get(userId) ?? 0;
+  return Math.max(0, last + QUIZ_COOLDOWN_MS - Date.now());
+}
+
+function recordQuizRequest(userId: number): void {
+  recentQuizRequests.set(userId, Date.now());
+}
+
+function isRateLimited(userId: number): boolean {
+  return getCooldownRemainingMs(userId) > 0;
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -479,12 +502,14 @@ async function finishGroupQuiz(ctx: Context, session: GroupQuizSession) {
 
 // ─── Bot setup ────────────────────────────────────────────────────────────────
 
-export function startTelegramBot(): void {
+export async function startTelegramBot(): Promise<void> {
   const token = process.env["TELEGRAM_BOT_TOKEN"];
   if (!token) {
     console.warn("TELEGRAM_BOT_TOKEN not set; Telegram bot disabled.");
     return;
   }
+
+  await initLeaderboardStore();
 
   const bot = new Telegraf(token);
 
@@ -592,6 +617,20 @@ export function startTelegramBot(): void {
   // ── /quiz (solo) ─────────────────────────────────────────────────────────────
 
   bot.command("quiz", async (ctx) => {
+    const requesterId = getRequesterId(ctx);
+    if (requesterId === null) {
+      await ctx.reply("Unable to identify you. Please try again.");
+      return;
+    }
+    if (isRateLimited(requesterId)) {
+      const secondsLeft = Math.ceil(getCooldownRemainingMs(requesterId) / 1000);
+      await ctx.reply(
+        `⏳ Slow down a bit — please wait ${secondsLeft}s before starting another quiz.`,
+      );
+      return;
+    }
+    recordQuizRequest(requesterId);
+
     if (isGroupChat(ctx)) {
       await ctx.reply("For group competitions use /gquiz in this chat!");
       return;
@@ -620,6 +659,14 @@ export function startTelegramBot(): void {
     }
 
     const chatId = ctx.chat!.id;
+    if (isRateLimited(chatId)) {
+      const secondsLeft = Math.ceil(getCooldownRemainingMs(chatId) / 1000);
+      await ctx.reply(
+        `⏳ This chat needs a short break. Please wait ${secondsLeft}s before starting another group quiz.`,
+      );
+      return;
+    }
+
     const existing = getGroupSession(chatId, from.id);
     if (existing.phase !== "idle" && existing.phase !== "finished") {
       await ctx.reply(
@@ -628,6 +675,7 @@ export function startTelegramBot(): void {
       return;
     }
 
+    recordQuizRequest(chatId);
     const session = resetGroupSession(chatId, from.id);
     session.phase = "awaiting_topic";
 
@@ -907,7 +955,7 @@ export function startTelegramBot(): void {
     }
 
     try {
-      const questions = await generateTriviaQuestions(
+      const questions = await fetchValidatedTriviaQuestions(
         session.topic,
         session.desiredCount,
         session.difficulty,
@@ -1004,7 +1052,7 @@ export function startTelegramBot(): void {
     }
 
     try {
-      const questions = await generateTriviaQuestions(
+      const questions = await fetchValidatedTriviaQuestions(
         session.topic,
         session.desiredCount,
         session.difficulty,
@@ -1241,8 +1289,15 @@ export function startTelegramBot(): void {
 
   // ── Error handler ──────────────────────────────────────────────────────────
 
-  bot.catch((err, ctx) => {
+  bot.catch(async (err, ctx) => {
     console.error("Telegraf error:", err, (ctx as any).update);
+    try {
+      await ctx.reply(
+        "Sorry, something went wrong. Please try again or type /help for guidance.",
+      );
+    } catch {
+      // ignore reply failures
+    }
   });
 
   bot.launch().catch((err) => {

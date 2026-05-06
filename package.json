@@ -6,14 +6,18 @@
   "scripts": {
     "dev": "tsx watch --env-file=.env server.ts",
     "build": "tsc",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "test": "tsx test/leaderboard.test.ts"
   },
   "dependencies": {
+    "pg": "^8.11.0",
     "telegraf": "^4.16.3"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "@types/pg": "^8.6.7",
     "tsx": "^4.0.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "uvu": "^0.5.5"
   }
 }
