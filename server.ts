@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { startTelegramBot } from "./bot/index";
 import http from "http";
 
