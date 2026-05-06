@@ -31,10 +31,10 @@ import {
   renderAchievements,
   renderNewAchievements,
 } from "./achievements";
+import { getLifetimeStats, addToLifetimeStats } from "./lifetimeStats";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const lifetimeStats = new Map<number, { total: number; correct: number }>();
 const COUNT_OPTIONS = [5, 10, 15, 20];
 const DIFFICULTY_OPTIONS = ["Easy", "Medium", "Hard", "Random"] as const;
 const LETTERS = ["A", "B", "C", "D"];
@@ -198,7 +198,7 @@ async function checkAndAnnounceLeaderboardAchievements(
 ): Promise<void> {
   const isTop5 = isUserInTopNGlobal(userId, 5);
   const isTop1Cat = isUserTop1InAnyCategory(userId);
-  const newAchs = recordLeaderboardPosition(userId, isTop5, isTop1Cat);
+  const newAchs = await recordLeaderboardPosition(userId, isTop5, isTop1Cat);
   const msg = renderNewAchievements(newAchs);
   if (msg) await ctx.reply(msg, { parse_mode: "HTML" });
 }
@@ -291,10 +291,7 @@ async function finishSoloQuiz(ctx: Context, session: QuizSession) {
   }
 
   // Update lifetime stats
-  const stats = lifetimeStats.get(session.chatId) ?? { total: 0, correct: 0 };
-  stats.total += total;
-  stats.correct += correct;
-  lifetimeStats.set(session.chatId, stats);
+  await addToLifetimeStats(session.chatId, correct, total);
 
   // Achievements
   const correctResults = session.results.filter((r) => r.isCorrect);
@@ -302,7 +299,7 @@ async function finishSoloQuiz(ctx: Context, session: QuizSession) {
     correctResults.length > 0
       ? correctResults.reduce((s, r) => s + r.timeMs, 0) / correctResults.length
       : avg;
-  const newAchs = recordSoloQuizComplete(session.chatId, correct, total, avg);
+  const newAchs = await recordSoloQuizComplete(session.chatId, correct, total, avg);
   const achMsg = renderNewAchievements(newAchs);
   if (achMsg) await ctx.reply(achMsg, { parse_mode: "HTML" });
 
@@ -465,7 +462,7 @@ async function finishGroupQuiz(ctx: Context, session: GroupQuizSession) {
     if (p.correct === 0) continue;
     const avgSpeedMs = p.totalCorrectMs / p.correct;
     const isWinner = winnerIds.has(p.userId);
-    const newAchs = recordGroupQuizParticipation(
+    const newAchs = await recordGroupQuizParticipation(
       p.userId,
       isWinner,
       p.correct,
@@ -473,6 +470,8 @@ async function finishGroupQuiz(ctx: Context, session: GroupQuizSession) {
       avgSpeedMs,
     );
     if (newAchs.length > 0) allNewAchs.set(p.userId, newAchs);
+
+    await addToLifetimeStats(p.userId, p.correct, total);
 
     recordResult({
       userId: p.userId,
@@ -737,7 +736,7 @@ export async function startTelegramBot(): Promise<void> {
   // ── /stats ───────────────────────────────────────────────────────────────────
 
   bot.command("stats", async (ctx) => {
-    const stats = lifetimeStats.get(ctx.chat!.id);
+    const stats = await getLifetimeStats(ctx.chat!.id);
     if (!stats || stats.total === 0) {
       await ctx.reply("No stats yet — play a quiz first using /quiz!");
       return;
@@ -1207,7 +1206,7 @@ export async function startTelegramBot(): Promise<void> {
 
       // Achievement: first correct on Q1
       if (isFirstCorrect && qIndex === 0) {
-        const newAchs = recordFirstQ1Correct(from.id);
+        const newAchs = await recordFirstQ1Correct(from.id);
         if (newAchs.length > 0) {
           const msg = renderNewAchievements(newAchs);
           if (msg)
