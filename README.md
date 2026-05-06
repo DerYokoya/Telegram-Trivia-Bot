@@ -4,7 +4,7 @@ An AI-powered Telegram trivia bot. Ask it for a quiz on any topic, pick your dif
 
 ## Bot Live on Telegram
 
-https://t.me/UraharaTriviaBot
+[![Telegram Bot](https://img.shields.io/badge/Telegram%20Bot-Bot-blue?style=for-the-badge)](https://t.me/UraharaTriviaBot/)
 
 ## Video Showcase
 
