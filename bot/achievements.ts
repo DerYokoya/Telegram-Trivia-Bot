@@ -322,8 +322,8 @@ export async function recordLeaderboardPosition(
 
 // ─── Render ───────────────────────────────────────────────────────────────────
 
-export function renderAchievements(userId: number): string {
-  const s = getUserStatSync(userId);
+export async function renderAchievements(userId: number): Promise<string> {
+  const s = await getUserStats(userId);
   const total = ALL_ACHIEVEMENTS.length;
   const unlocked = s.unlocked.size;
 

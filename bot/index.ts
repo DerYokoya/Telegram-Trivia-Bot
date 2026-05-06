@@ -607,7 +607,7 @@ export async function startTelegramBot(): Promise<void> {
     const userId = isGroupChat(ctx)
       ? ((ctx as any).from?.id ?? ctx.chat!.id)
       : ctx.chat!.id;
-    const text = renderAchievements(userId);
+    const text = await renderAchievements(userId);
     for (const chunk of chunkText(text, 3500)) {
       await ctx.reply(chunk, { parse_mode: "HTML" });
     }
