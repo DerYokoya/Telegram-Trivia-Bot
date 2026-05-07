@@ -2,10 +2,6 @@
 
 An AI-powered Telegram trivia bot. Ask it for a quiz on any topic, pick your difficulty, and compete with friends on the global leaderboard.
 
-## Bot Live on Telegram
-
-[![Telegram Bot](https://img.shields.io/badge/Telegram%20Bot-Bot-blue?style=for-the-badge)](https://t.me/UraharaTriviaBot/)
-
 ## Video Showcase
 
 https://github.com/user-attachments/assets/e5f86bf1-aa36-40b8-bb08-26849f96e006
