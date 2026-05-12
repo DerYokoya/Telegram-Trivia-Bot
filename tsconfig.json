@@ -6,8 +6,17 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "outDir": "dist",
-    "rootDir": "."
+    "rootDir": ".",
+    "types": ["vitest"]
   },
   "include": ["**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }
+
+
+// Cannot find type definition file for 'vitest'.
+//   The file is in the program because:
+//     Entry point of type library 'vitest' specified in compilerOptionsts
+//    File is in the program because:
+//      Root file specified in compilation settings
+  

@@ -56,4 +56,18 @@ export async function initDatabase(): Promise<void> {
       updated_at bigint NOT NULL
     );
   `);
+
+  await pool.query(`
+  CREATE INDEX IF NOT EXISTS idx_leaderboard_score 
+  ON leaderboard ((correct::float / total), avg_speed_ms);
+  
+  CREATE INDEX IF NOT EXISTS idx_leaderboard_category 
+  ON leaderboard(category);
+  
+  CREATE INDEX IF NOT EXISTS idx_leaderboard_user 
+  ON leaderboard(user_id, recorded_at);
+  
+  CREATE INDEX IF NOT EXISTS idx_achievements_user 
+  ON user_achievements(user_id);
+`);
 }

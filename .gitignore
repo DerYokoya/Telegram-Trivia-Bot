@@ -2,6 +2,7 @@ node_modules/
 dist/
 .env
 *.env.local
+bot.zip
 
 # React app build
 tele-bot-app/dist/

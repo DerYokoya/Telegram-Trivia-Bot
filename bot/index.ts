@@ -32,6 +32,40 @@ import {
   renderNewAchievements,
 } from "./achievements";
 import { getLifetimeStats, addToLifetimeStats } from "./lifetimeStats";
+import { Config } from "./config";
+
+// Add to index.ts top section
+interface RateLimitInfo {
+  count: number;
+  firstRequestAt: number;
+}
+
+const userQuizCounts = new Map<number, RateLimitInfo>();
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+
+function checkRateLimit(userId: number): {
+  allowed: boolean;
+  remaining?: number;
+} {
+  const now = Date.now();
+  const info = userQuizCounts.get(userId);
+
+  if (!info || now - info.firstRequestAt > RATE_LIMIT_WINDOW_MS) {
+    userQuizCounts.set(userId, { count: 1, firstRequestAt: now });
+    return { allowed: true };
+  }
+
+  if (info.count >= Config.MAX_QUIZZES_PER_HOUR) {
+    const hoursLeft = Math.ceil(
+      (info.firstRequestAt + RATE_LIMIT_WINDOW_MS - now) / 3600000,
+    );
+    return { allowed: false, remaining: hoursLeft };
+  }
+
+  info.count++;
+  userQuizCounts.set(userId, info);
+  return { allowed: true };
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -299,7 +333,12 @@ async function finishSoloQuiz(ctx: Context, session: QuizSession) {
     correctResults.length > 0
       ? correctResults.reduce((s, r) => s + r.timeMs, 0) / correctResults.length
       : avg;
-  const newAchs = await recordSoloQuizComplete(session.chatId, correct, total, avg);
+  const newAchs = await recordSoloQuizComplete(
+    session.chatId,
+    correct,
+    total,
+    avg,
+  );
   const achMsg = renderNewAchievements(newAchs);
   if (achMsg) await ctx.reply(achMsg, { parse_mode: "HTML" });
 
