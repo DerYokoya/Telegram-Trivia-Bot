@@ -8,6 +8,10 @@ A Telegram bot that generates trivia questions on any topic using an LLM, with s
 
 https://github.com/user-attachments/assets/e5f86bf1-aa36-40b8-bb08-26849f96e006
 
+### Test
+
+https://github.com/user-attachments/assets/138c8353-daff-4261-98e0-4ceb87942f23
+
 ## Screenshots
 
 <div align="center">
