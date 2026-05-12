@@ -1,10 +1,8 @@
 # Telegram Trivia Bot
 
-An AI-powered Telegram trivia bot. Ask it for a quiz on any topic, pick your difficulty, and compete with friends on the global leaderboard.
+A Telegram bot that generates trivia questions on any topic using an LLM, with solo and group play, a scoring system, achievements, and leaderboards. Built with TypeScript, Telegraf, and OpenRouter.
 
-## To Use the Bot
-
-[![Use Bot](https://img.shields.io/badge/Use-Bot-cyan?style=for-the-badge)](https://t.me/UraharaTriviaBot/)<br>
+[![Use Bot](https://img.shields.io/badge/Use-Bot-cyan?style=for-the-badge)](https://t.me/UraharaTriviaBot/)
 
 ## Video Showcase
 
@@ -33,7 +31,7 @@ https://github.com/user-attachments/assets/e5f86bf1-aa36-40b8-bb08-26849f96e006
 
 ## How it works
 
-The bot uses [OpenRouter](https://openrouter.ai) to generate fresh trivia questions on demand.
+You pick a topic, question count, and difficulty. The bot calls [OpenRouter](https://openrouter.ai) to generate fresh questions on the spot. Scores factor in accuracy, difficulty, and response speed, then, if the user allows it, feed into a global leaderboard and per-category rankings.
 
 ## Setup
 
@@ -43,7 +41,7 @@ npm install
 npm run dev
 ```
 
-**Required env vars:**
+**Required environment variables:**
 
 | Variable | Where to get it |
 |---|---|
@@ -62,8 +60,8 @@ Browse free models at [openrouter.ai/models?q=free](https://openrouter.ai/models
 
 | Command | Description |
 |---|---|
-| `/quiz` | Start a solo quiz (prompts for topic, question count, and difficulty) |
-| `/gquiz` | Start a group quiz in a group chat (prompts for topic, question count, and difficulty) |
+| `/quiz` | Start a solo quiz — prompts for topic, question count, and difficulty |
+| `/gquiz` | Start a group quiz in a group chat |
 | `/achievements` | View your earned badges |
 | `/leaderboard` | Global top 10 |
 | `/topleaderboard` | Top players by category |
@@ -73,6 +71,8 @@ Browse free models at [openrouter.ai/models?q=free](https://openrouter.ai/models
 ## Difficulty levels
 
 🟢 Easy · 🟡 Medium · 🔴 Hard · 🎲 Random (AI picks per question)
+
+Difficulty affects the score multiplier, so a perfect hard quiz scores up to 2× more than an easy one. Answering quickly adds a further speed bonus (up to +30% for under 5 seconds per question).
 
 ## Achievements
 
@@ -93,18 +93,36 @@ There are 20 achievements to unlock across solo and group play:
 ```
 tele-quiz-bot/
 ├── bot/
-│   ├── index.ts          # Main bot logic and command handlers
+│   ├── index.ts          # Bot entry point and command handlers
+│   ├── handlers.ts       # Shared message/callback handlers
+│   ├── quiz.ts           # Solo quiz state machine
+│   ├── groupquiz.ts      # Group quiz state machine
 │   ├── openrouter.ts     # AI question generation
-│   ├── quiz.ts           # Solo quiz state management
-│   ├── groupquiz.ts      # Group quiz state management
-│   ├── achievements.ts   # Achievement tracking
-│   └── leaderboard.ts    # Leaderboard logic
-├── server.ts             # Entry point
-└── tele-bot-app/         # Doesn't affect the bot. React landing page (Vite)
+│   ├── achievements.ts   # Achievement definitions and tracking
+│   ├── leaderboard.ts    # Global and category leaderboards
+│   ├── lifetimeStats.ts  # Per-user stat tracking
+│   ├── scoring.ts        # Score calculation logic
+│   ├── triviaService.ts  # Question fetching/caching
+│   ├── validation.ts     # Input validation helpers
+│   ├── db.ts             # PostgreSQL connection
+│   ├── config.ts         # Environment config
+│   ├── health.ts         # Health check endpoint
+│   └── logger.ts         # Logging utilities
+├── tests/                # Vitest unit tests
+├── server.ts             # HTTP server + bot init
+└── tele-bot-app/         # React landing page (Vite, doesn't affect the bot)
 ```
 
 ## Tech stack
 
 - **[Telegraf](https://telegraf.js.org/)** — Telegram bot framework
 - **[OpenRouter](https://openrouter.ai)** — LLM API gateway (supports many free models)
-- **TypeScript + tsx** — for dev, no build step needed
+- **PostgreSQL** — persistent storage for scores, stats, and achievements
+- **TypeScript + tsx** — runs directly without a build step in dev
+- **Vitest** — unit tests for scoring, leaderboard, and validation logic
+
+## Running tests
+
+```bash
+npm test
+```
