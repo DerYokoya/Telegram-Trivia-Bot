@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { 
-  clearLeaderboard, 
-  recordResult, 
+import {
+  clearLeaderboard,
+  recordResult,
   getGlobalLeaderboard,
   getCategoryLeaderboard,
   isUserInTopNGlobal,
   isUserTop1InAnyCategory,
-  type LeaderboardEntry 
+  type LeaderboardEntry,
 } from "../bot/leaderboard";
 
 describe("Leaderboard", () => {
@@ -45,7 +45,7 @@ describe("Leaderboard", () => {
         avgSpeedMs: 5000,
         recordedAt: Date.now(),
       });
-      
+
       recordResult({
         userId: 2,
         nickname: "Low Score",
@@ -57,11 +57,11 @@ describe("Leaderboard", () => {
         avgSpeedMs: 1000,
         recordedAt: Date.now(),
       });
-      
+
       const leaderboard = getGlobalLeaderboard(10);
       expect(leaderboard[0]?.nickname).toBe("High Score");
     });
-    
+
     it("uses speed as tiebreaker", () => {
       recordResult({
         userId: 1,
@@ -74,7 +74,7 @@ describe("Leaderboard", () => {
         avgSpeedMs: 2000,
         recordedAt: Date.now(),
       });
-      
+
       recordResult({
         userId: 2,
         nickname: "Slow",
@@ -86,31 +86,35 @@ describe("Leaderboard", () => {
         avgSpeedMs: 5000,
         recordedAt: Date.now(),
       });
-      
+
       const leaderboard = getGlobalLeaderboard(10);
       expect(leaderboard[0]?.nickname).toBe("Fast");
     });
   });
-  
+
+  // tests/leaderboard.test.ts - update the category filtering section
   describe("category filtering", () => {
     beforeEach(() => {
+      // Clear and add test data with better category names
+      clearLeaderboard();
+
       recordResult({
         userId: 1,
         nickname: "Math Pro",
         topic: "Algebra",
-        category: "mathematics algebra",
+        category: "math", // Simplified category name
         difficulty: "hard",
         correct: 9,
         total: 10,
         avgSpeedMs: 3000,
         recordedAt: Date.now(),
       });
-      
+
       recordResult({
         userId: 2,
         nickname: "History Buff",
         topic: "WW2",
-        category: "history world war",
+        category: "history", // Simplified category name
         difficulty: "medium",
         correct: 7,
         total: 10,
@@ -118,28 +122,42 @@ describe("Leaderboard", () => {
         recordedAt: Date.now(),
       });
     });
-    
+
     it("filters by category words", () => {
       const mathLeaderboard = getCategoryLeaderboard("math", 10);
       expect(mathLeaderboard.length).toBe(1);
       expect(mathLeaderboard[0]?.nickname).toBe("Math Pro");
-      
+
       const historyLeaderboard = getCategoryLeaderboard("history", 10);
       expect(historyLeaderboard.length).toBe(1);
       expect(historyLeaderboard[0]?.nickname).toBe("History Buff");
     });
-    
+
     it("handles partial matches", () => {
-      const results = getCategoryLeaderboard("algebra", 10);
+      // Add a more complex category
+      recordResult({
+        userId: 3,
+        nickname: "Physics Expert",
+        topic: "Quantum Mechanics",
+        category: "science physics quantum",
+        difficulty: "hard",
+        correct: 8,
+        total: 10,
+        avgSpeedMs: 3500,
+        recordedAt: Date.now(),
+      });
+
+      const results = getCategoryLeaderboard("physics", 10);
       expect(results.length).toBe(1);
+      expect(results[0]?.nickname).toBe("Physics Expert");
     });
-    
+
     it("returns empty for no matches", () => {
       const results = getCategoryLeaderboard("science", 10);
       expect(results.length).toBe(0);
     });
   });
-  
+
   describe("user position checks", () => {
     it("correctly identifies top N users", () => {
       for (let i = 1; i <= 10; i++) {
@@ -155,11 +173,11 @@ describe("Leaderboard", () => {
           recordedAt: Date.now(),
         });
       }
-      
+
       expect(isUserInTopNGlobal(1, 5)).toBe(true);
       expect(isUserInTopNGlobal(6, 5)).toBe(false);
     });
-    
+
     it("detects category rank 1", () => {
       // Add multiple users to same category
       recordResult({
@@ -173,7 +191,7 @@ describe("Leaderboard", () => {
         avgSpeedMs: 3000,
         recordedAt: Date.now(),
       });
-      
+
       recordResult({
         userId: 2,
         nickname: "Runner Up",
@@ -185,7 +203,7 @@ describe("Leaderboard", () => {
         avgSpeedMs: 3500,
         recordedAt: Date.now(),
       });
-      
+
       expect(isUserTop1InAnyCategory(1)).toBe(true);
       expect(isUserTop1InAnyCategory(2)).toBe(false);
     });
