@@ -126,3 +126,15 @@ tele-quiz-bot/
 ```bash
 npm test
 ```
+
+Three test suites cover the core logic:
+
+- **scoring** — verifies the weighted score formula across difficulty multipliers, speed bonuses, and edge cases like zero questions or a perfect score
+- **leaderboard** — checks ranking, tie-breaking, and score aggregation
+- **validation** — ensures topic/question-count inputs are rejected or accepted correctly
+
+To run with coverage:
+
+```bash
+npm run test:coverage
+```
