@@ -575,6 +575,7 @@ export async function startTelegramBot(): Promise<void> {
     { command: "leaderboard", description: "Global all-topics leaderboard" },
     { command: "topleaderboard", description: "Leaderboard for a topic" },
     { command: "stats", description: "Your personal quiz stats" },
+    { command: "scoring", description: "How scoring works" },
     { command: "help", description: "Show help information" },
     { command: "about", description: "About this bot" },
   ]);
