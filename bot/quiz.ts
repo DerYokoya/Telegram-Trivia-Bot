@@ -19,6 +19,7 @@ export interface QuestionResult {
   timeMs: number;
 }
 
+// quiz.ts - Add to QuizSession interface
 export interface QuizSession {
   chatId: number;
   phase: QuizPhase;
@@ -26,6 +27,7 @@ export interface QuizSession {
   desiredCount: number | null;
   difficulty: "easy" | "medium" | "hard" | "random";
   questions: TriviaQuestion[];
+  questionDifficulties: Array<"easy" | "medium" | "hard">; // NEW
   currentIndex: number;
   results: QuestionResult[];
   questionStartedAt: number | null;
@@ -53,6 +55,7 @@ export function createSession(chatId: number): QuizSession {
     desiredCount: null,
     difficulty: "random",
     questions: [],
+    questionDifficulties: [], // NEW
     currentIndex: 0,
     results: [],
     questionStartedAt: null,

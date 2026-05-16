@@ -4,13 +4,14 @@ const MODEL = process.env["OPENROUTER_MODEL"] ?? "openai/gpt-oss-120b:free";
 
 export type QuestionDifficulty = "easy" | "medium" | "hard";
 
+// openrouter.ts - Add to generateTriviaQuestions response
 export interface TriviaQuestion {
   question: string;
   options: string[];
   correctIndex: number;
   explanation: string;
   /** Present only when difficulty is "random" or a fixed difficulty was requested */
-  difficulty?: QuestionDifficulty;
+  difficulty?: "easy" | "medium" | "hard";
 }
 
 export async function generateTriviaQuestions(
@@ -73,7 +74,10 @@ Respond ONLY with valid JSON in this exact shape, no markdown fences, no comment
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error("OpenRouter API error", { status: response.status, errorText });
+    console.error("OpenRouter API error", {
+      status: response.status,
+      errorText,
+    });
     throw new Error(`OpenRouter API error: ${response.status} ${errorText}`);
   }
 
@@ -118,14 +122,10 @@ Respond ONLY with valid JSON in this exact shape, no markdown fences, no comment
   // Normalise difficulty field
   const validDifficulties = new Set<string>(["easy", "medium", "hard"]);
   for (const q of valid) {
-    if (q.difficulty && !validDifficulties.has(q.difficulty)) {
-      delete q.difficulty;
-    }
     // If a fixed difficulty was set, always stamp it
     if (!isRandom && !q.difficulty) {
-      q.difficulty = difficulty as QuestionDifficulty;
+      q.difficulty = difficulty as "easy" | "medium" | "hard";
     }
   }
-
   return valid.slice(0, count);
 }

@@ -37,6 +37,7 @@ export interface GroupQuizSession {
   desiredCount: number | null;
   difficulty: "easy" | "medium" | "hard" | "random";
   questions: TriviaQuestion[];
+  questionDifficulties: Array<"easy" | "medium" | "hard">;
   currentIndex: number;
   quizStartedAt: number | null;
   questionStartedAt: number | null;
@@ -60,6 +61,7 @@ function freshSession(chatId: number, hostId: number): GroupQuizSession {
     desiredCount: null,
     difficulty: "random",
     questions: [],
+    questionDifficulties: [],
     currentIndex: 0,
     quizStartedAt: null,
     questionStartedAt: null,

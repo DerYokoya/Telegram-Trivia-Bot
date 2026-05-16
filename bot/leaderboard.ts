@@ -8,6 +8,7 @@ export interface LeaderboardEntry {
   topic: string;
   category: string;
   difficulty: "easy" | "medium" | "hard" | "random";
+  effectiveMultiplier?: number;
   correct: number;
   total: number;
   avgSpeedMs: number;

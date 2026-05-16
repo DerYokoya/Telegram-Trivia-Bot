@@ -33,6 +33,7 @@ import {
 } from "./achievements";
 import { getLifetimeStats, addToLifetimeStats } from "./lifetimeStats";
 import { Config } from "./config";
+import { calculateWeightedScore, getDifficultyDisplay } from "./scoring";
 
 // Add to index.ts top section
 interface RateLimitInfo {
@@ -422,10 +423,21 @@ async function finishGroupQuiz(ctx: Context, session: GroupQuizSession) {
       }
       const avgMs = p.correct > 0 ? p.totalCorrectMs / p.correct : 0;
       const pct = total > 0 ? Math.round((p.correct / total) * 100) : 0;
+      
+      // Calculate weighted score for display (optional)
+      const weightedScore = calculateWeightedScore({
+        correct: p.correct,
+        total: total,
+        avgSpeedMs: avgMs,
+        difficulty: session.difficulty,
+        questionDifficulties: session.questionDifficulties,
+      });
+      
       lines.push(
         `${medal(rank)} <b>${escapeHtml(p.displayName)}</b>` +
           `  ✅ ${p.correct}/${total} (${pct}%)` +
-          (p.correct > 0 ? `  ⚡ avg ${formatDuration(avgMs)}` : ""),
+          (p.correct > 0 ? `  ⚡ avg ${formatDuration(avgMs)}` : "") +
+          `  🏆 ${weightedScore} pts`,
       );
     }
 
@@ -497,10 +509,13 @@ async function finishGroupQuiz(ctx: Context, session: GroupQuizSession) {
 
   // Achievements + leaderboard for all participants
   const allNewAchs = new Map<number, string[]>();
+  
   for (const p of standings) {
     if (p.correct === 0) continue;
-    const avgSpeedMs = p.totalCorrectMs / p.correct;
+    
+    const avgSpeedMs = p.correct > 0 ? p.totalCorrectMs / p.correct : 0;
     const isWinner = winnerIds.has(p.userId);
+    
     const newAchs = await recordGroupQuizParticipation(
       p.userId,
       isWinner,
@@ -508,6 +523,7 @@ async function finishGroupQuiz(ctx: Context, session: GroupQuizSession) {
       total,
       avgSpeedMs,
     );
+    
     if (newAchs.length > 0) allNewAchs.set(p.userId, newAchs);
 
     await addToLifetimeStats(p.userId, p.correct, total);
@@ -519,8 +535,8 @@ async function finishGroupQuiz(ctx: Context, session: GroupQuizSession) {
       category: (session.topic ?? "trivia").toLowerCase().trim(),
       difficulty: session.difficulty,
       correct: p.correct,
-      total,
-      avgSpeedMs,
+      total: total,
+      avgSpeedMs: avgSpeedMs,
       recordedAt: Date.now(),
     });
 
@@ -808,6 +824,27 @@ export async function startTelegramBot(): Promise<void> {
     );
   });
 
+  // Explaining the scoring
+  bot.command("scoring", async (ctx) => {
+    await ctx.reply(
+      `<b>📊 How Scoring Works</b>\n\n` +
+        `<b>Base Score:</b> Accuracy × 1000 points\n\n` +
+        `<b>Difficulty Multipliers:</b>\n` +
+        `🟢 Easy: 1.0x\n` +
+        `🟡 Medium: 1.5x\n` +
+        `🔴 Hard: 2.0x\n` +
+        `🎲 Random: Weighted average of actual questions\n` +
+        `   (Example: 3 easy + 2 hard = 1.4x)\n\n` +
+        `<b>Speed Bonuses:</b>\n` +
+        `⚡ &lt;5s avg: +30%\n` +
+        `🚀 &lt;10s avg: +15%\n` +
+        `🏃 &lt;20s avg: +5%\n\n` +
+        `<b>Perfect Score:</b> +10% bonus\n\n` +
+        `<b>Final Score:</b> Base × Difficulty × Speed × Perfect`,
+      { parse_mode: "HTML" },
+    );
+  });
+
   // ── Text handler ─────────────────────────────────────────────────────────────
 
   bot.on("text", async (ctx) => {
@@ -999,6 +1036,9 @@ export async function startTelegramBot(): Promise<void> {
         session.difficulty,
       );
       session.questions = questions;
+      session.questionDifficulties = questions
+        .map((q) => q.difficulty)
+        .filter((d): d is "easy" | "medium" | "hard" => d !== undefined);
       session.currentIndex = 0;
       session.results = [];
       session.phase = "in_progress";
@@ -1096,6 +1136,9 @@ export async function startTelegramBot(): Promise<void> {
         session.difficulty,
       );
       session.questions = questions;
+      session.questionDifficulties = questions
+        .map((q) => q.difficulty)
+        .filter((d): d is "easy" | "medium" | "hard" => d !== undefined);
       session.currentIndex = 0;
       session.results = [];
       session.phase = "in_progress";
