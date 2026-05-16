@@ -8,6 +8,10 @@ A Telegram bot that generates trivia questions on any topic using an LLM, with s
 
 https://github.com/user-attachments/assets/e5f86bf1-aa36-40b8-bb08-26849f96e006
 
+### Test
+
+https://github.com/user-attachments/assets/138c8353-daff-4261-98e0-4ceb87942f23
+
 ## Screenshots
 
 <div align="center">
@@ -125,4 +129,16 @@ tele-quiz-bot/
 
 ```bash
 npm test
+```
+
+Three test suites cover the core logic:
+
+- **scoring** — verifies the weighted score formula across difficulty multipliers, speed bonuses, and edge cases like zero questions or a perfect score
+- **leaderboard** — checks ranking, tie-breaking, and score aggregation
+- **validation** — ensures topic/question-count inputs are rejected or accepted correctly
+
+To run with coverage:
+
+```bash
+npm run test:coverage
 ```
