@@ -179,22 +179,26 @@ Score = Accuracy × 1000 × Difficulty × Speed × Bonus
 
 ```
 tele-quiz-bot/
-├── index.ts
-├── triviaService.ts
-├── openrouter.ts
-├── opentdb.ts
-├── quiz.ts
-├── groupquiz.ts
-├── achievements.ts
-├── leaderboard.ts
-├── lifetimeStats.ts
-├── scoring.ts
-├── config.ts
-├── server.ts
-├── db.ts
-├── validation.ts
-├── logger.ts
-└── tests/
+├── index.ts                # Point d'entrée du bot, gestionnaires de commandes, requêtes de rappel
+├── triviaService.ts        # Récupération et mise en cache des questions (hybride OpenTDB + IA)
+├── openrouter.ts           # Génération de questions par IA via l'API OpenRouter
+├── opentdb.ts              # Intégration de l'API OpenTDB + logique de correspondance des catégories
+├── quiz.ts                 # Machine à états et gestion des sessions pour le quiz solo
+├── groupquiz.ts            # Machine à états et gestion des sessions pour le quiz en groupe
+├── achievements.ts         # Définition, suivi et affichage de 20 succès
+├── leaderboard.ts          # Stockage et récupération du classement global et par catégorie
+├── lifetimeStats.ts        # Suivi des statistiques à vie par utilisateur
+├── scoring.ts              # Calcul du score pondéré (difficulté + rapidité + sans erreur)
+├── config.ts               # Chargement des variables d'environnement et valeurs par défaut
+├── server.ts               # Serveur HTTP pour les contrôles d'intégrité et les webhooks
+├── db.ts                   # Pool de connexions PostgreSQL et requêtes
+├── validation.ts           # Aides à la validation des entrées (sujets, pseudonymes, etc.)
+├── logger.ts               # Utilitaire de journalisation structurée
+├── tests/
+│ ├── scoring.test.ts       # Tests unitaires de calcul du score
+│ ├── leaderboard.test.ts   # Tests de classement et de départage
+│ └── validation.test.ts    # Tests de validation des entrées
+└── .env.example            # Modèle de variables d'environnement
 ```
 
 ## Tech stack
@@ -220,4 +224,3 @@ PRs welcome.
 ## License
 
 MIT
-```
