@@ -35,7 +35,7 @@ https://github.com/user-attachments/assets/138c8353-daff-4261-98e0-4ceb87942f23
 
 ## How it works
 
-You pick a topic, question count, and difficulty. The bot calls [OpenRouter](https://openrouter.ai) to generate fresh questions on the spot. Scores factor in accuracy, difficulty, and response speed, then, if the user allows it, feed into a global leaderboard and per-category rankings.
+You pick a topic, question count, and difficulty. The bot first tries to find the topic in [OpenTDB](https://opentdb.com). If it doesn't find it, it calls [OpenRouter](https://openrouter.ai) to generate fresh questions on the spot. Scores factor in accuracy, difficulty, and response speed, then, if the user allows it, feed into a global leaderboard and per-category rankings.
 
 ## Design Choices
 
@@ -47,7 +47,7 @@ TypeScript was chosen for several critical reasons:
 
 2. **API Contract Enforcement** — The bot interacts with multiple external services (OpenRouter API, OpenTDB, PostgreSQL). TypeScript interfaces define exact response shapes, catching mismatches before production.
 
-3. **Better Developer Experience** — With 20+ achievement types, leaderboard entry shapes, and quiz session objects, TypeScript's autocomplete and inline documentation make the codebase maintainable.
+3. **Better Developer Experience** — With 20 achievement types, leaderboard entry shapes, and quiz session objects, TypeScript's autocomplete and inline documentation make the codebase maintainable.
 
 4. **Refactoring Confidence** — When changing a data structure (e.g., adding a `difficulty` field to questions), TypeScript flags every usage site, preventing silent bugs.
 
@@ -59,7 +59,7 @@ The bot implements a hybrid approach to question fetching, prioritizing performa
 
 **AI Generation (OpenRouter)** — Used for specific sub-topics (e.g., "WWII", "NBA 1960s", "Greek Mythology") where OpenTDB would return off-topic questions from the broader category.
 
-**Why this matters:** OpenTDB responds in ~200ms with vetted content, but can't handle niche topics. AI generation takes 2-5 seconds but can target anything. The hybrid approach gives users the best of both worlds — fast responses for common topics, precise coverage for obscure ones.
+**Why this matters:** OpenTDB responds in ~200ms with vetted content, but can't handle niche topics. AI generation takes longer (the time depends on what model is used) but can target anything. The hybrid approach gives users fast responses for common topics, with precise coverage for obscure ones.
 
 ### State Machine Design
 
@@ -70,8 +70,6 @@ Both solo and group quizzes use explicit state machines (`idle` → `awaiting_to
 Achievements, leaderboards, and lifetime stats are stored in PostgreSQL rather than in-memory to survive bot restarts and scale across multiple instances.
 
 ## What This Project Demonstrates
-
-This bot showcases several production-grade software engineering concepts:
 
 ### 1. **Hybrid API Integration**
 - Graceful fallback between data sources (OpenTDB → AI)
@@ -84,7 +82,7 @@ This bot showcases several production-grade software engineering concepts:
 - Race condition handling using atomic answer registration
 
 ### 3. **Gamification & Engagement Systems**
-- 20+ achievements with progressive unlock conditions
+- 20 achievements with progressive unlock conditions
 - Weighted scoring algorithm factoring accuracy, difficulty, and speed
 - Global + category-specific leaderboards with tie-breaking
 
@@ -213,7 +211,7 @@ tele-quiz-bot/
 ├── opentdb.ts              # OpenTDB API integration + category matching logic
 ├── quiz.ts                 # Solo quiz state machine and session management
 ├── groupquiz.ts            # Group quiz state machine and session management
-├── achievements.ts         # 20+ achievement definitions, tracking, and rendering
+├── achievements.ts         # 20 achievement definitions, tracking, and rendering
 ├── leaderboard.ts          # Global and category leaderboard storage/retrieval
 ├── lifetimeStats.ts        # Per-user lifetime statistics tracking
 ├── scoring.ts              # Weighted score calculation (difficulty + speed + perfect)
