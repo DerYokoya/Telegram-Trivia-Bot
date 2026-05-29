@@ -59,7 +59,7 @@ Le bot combine deux sources :
 
 **OpenTDB (Open Trivia Database)** — Base gratuite avec +4000 questions vérifiées couvrant 24 catégories.
 
-**Génération IA (OpenRouter)** — Utilisée pour les sujets précis ou niche (ex: “WWII batailles”, “NBA 1960s”).
+**Génération IA (OpenRouter)** — Utilisée pour les sujets précis ou niche (ex: “WWII”, “NBA 1960s”).
 
 **Pourquoi c’est important :** OpenTDB est rapide (~200ms) mais limité. L’IA est plus lente mais flexible.
 
