@@ -117,13 +117,13 @@ This bot showcases several production-grade software engineering concepts:
 
 ### Technical Insights from Building This
 
-**Caching Strategy Matters** — The 30-minute cache on AI-generated questions significantly reduced API costs and latency for popular topics. However, caching per `(topic, count, difficulty)` tuple isn't perfect — two users quizzing on "WWII" get the same questions, reducing variety. A future improvement would shuffle from a larger cached pool.
+**Caching Strategy Matters:** The 30-minute cache on AI-generated questions significantly reduced API costs and latency for popular topics. However, caching per `(topic, count, difficulty)` tuple isn't perfect. Two users quizzing on "WWII" get the same questions, reducing variety. A future improvement would shuffle from a larger cached pool.
 
-**Group Quiz Timing is Tricky** — The first-correct-wins mechanic works well for engagement but creates a bias toward users with faster network connections or device response times. Adding a 2-second minimum answer window or randomizing answer order per user could level the playing field.
+**Group Quiz Timing is Tricky:** The first-correct-wins mechanic works well for engagement but creates a bias toward users with faster network connections or device response times. Adding a 2-second minimum answer window or randomizing answer order per user could level the playing field.
 
-**LLM Temperature Tuning** — The default temperature (creativity) for question generation required experimentation. Too low → repetitive question structures. Too high → factual errors. Currently set to 0.7 based on A/B testing with 50 sample quizzes.
+**LLM Temperature Tuning:** The default temperature (creativity) for question generation required experimentation. Too low → repetitive question structures. Too high → factual errors. Currently set to 0.7 based on A/B testing with 50 sample quizzes.
 
-**OpenTDB Category Mapping** — The regex-based topic → category matcher works for 80% of use cases but fails on ambiguous queries ("Apple" could be tech or fruit). A future ML-based classifier or user clarification step would improve accuracy.
+**OpenTDB Category Mapping:** The regex-based topic → category matcher works for 80% of use cases but fails on ambiguous queries ("Apple" could be tech or fruit). A future ML-based classifier or user clarification step would improve accuracy.
 
 ### Scaling Considerations
 
