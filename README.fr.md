@@ -103,79 +103,109 @@ Les achievements, stats et leaderboards sont persistés pour survivre aux redém
 - deep linking
 - support groupes / privés
 
-## Roadmap
+## Perspectives d'avenir et feuille de route
 
-| Feature | Description | Priorité |
-|--------|-------------|----------|
-| Daily Challenges | Quiz quotidien | Haute |
-| Clans | Groupes persistants | Moyenne |
-| Feedback difficulté | Ajustement IA | Moyenne |
-| Spaced repetition | Révision des erreurs | Basse |
-| Voice quizzes | Audio + STT | Basse |
-| Dashboard web | Stats visuelles | Moyenne |
-| Question packs | Contenu communautaire | Basse |
+### Améliorations prévues
 
-## Insights techniques
+| Fonctionnalité | Description | Priorité |
+|---------|-------------|----------|
+| **Défis quotidiens** | Quiz du jour sélectionné avec des points bonus | Élevée |
+| **Clans / Équipes** | Créer des groupes permanents avec des statistiques partagées et des classements de clans | Moyenne |
+| **Réévaluation de la difficulté des questions** | Permettre aux utilisateurs d'évaluer la difficulté des questions après y avoir répondu ; utiliser les commentaires pour affiner les suggestions de l'IA | Moyenne |
+| **Mode de répétition espacée** | Mode quiz qui répète les questions auxquelles les utilisateurs ont mal répondu, optimisé pour l'apprentissage | Faible |
+| **Quiz vocaux** | Poser des questions via un message vocal, accepter les réponses vocales grâce à la reconnaissance vocale | Faible |
+| **Tableau de bord Web** | Classements visuels, galerie des réalisations et historique des quiz | Moyenne |
+| **Packs de questions personnalisés** | Packs de questions soumis par la communauté avec système de vote/vérification | Faible |
 
-- Cache réduit les coûts mais limite la variété
-- Group quiz favorise les connexions rapides
-- Température IA optimale ~0.7
-- Classification de sujets OpenTDB imparfaite (~80%)
+### Aperçu technique de la mise en place
 
-## Scaling
+**L'importance de la stratégie de mise en cache :** La mise en cache de 30 minutes des questions générées par l'IA a considérablement réduit les coûts d'API et la latence pour les sujets populaires. Cependant, la mise en cache par tuple `(sujet, nombre, difficulté)` n'est pas parfaite. Deux utilisateurs participant à un quiz sur la « Seconde Guerre mondiale » obtiennent les mêmes questions, ce qui réduit la variété. Une amélioration future consisterait à piocher dans un pool de cache plus large.
 
-Jusqu’à ~1000 users simultanés :
+**Le timing des quiz en groupe est délicat :** le mécanisme « le premier à répondre correctement gagne » fonctionne bien pour l'engagement, mais crée un biais en faveur des utilisateurs disposant de connexions réseau plus rapides ou de temps de réponse des appareils plus courts. L'ajout d'un délai minimum de 2 secondes pour répondre ou la randomisation de l'ordre des réponses par utilisateur pourrait uniformiser les chances.
 
-- shard par chat_id
-- read replicas PostgreSQL
-- Redis pour sessions
-- queue pour IA
+**Réglage de la température du LLM :** La température par défaut (créativité) pour la génération de questions a nécessité des essais. Trop faible → structures de questions répétitives. Trop élevée → erreurs factuelles. Actuellement réglée sur 0,7 sur la base de tests A/B avec 50 quiz échantillons.
 
-## Setup
+**Mappage des catégories OpenTDB :** Le système de correspondance sujet → catégorie basé sur les expressions régulières fonctionne pour 80 % des cas d'utilisation, mais échoue sur les requêtes ambiguës (« Apple » pouvant désigner la technologie ou le fruit). Un futur classificateur basé sur le ML ou une étape de clarification par l'utilisateur améliorerait la précision.
+
+### Considérations relatives à la scalabilité
+
+L'architecture actuelle prend en charge jusqu'à environ 1 000 utilisateurs simultanés avec une seule instance PostgreSQL. Au-delà de cela :
+
+- **Répartissez par chat_id** sur plusieurs instances de bot
+- **Utilisez des répliques de lecture** pour les requêtes de classement
+- **Utilisez Redis** pour l'état de session au lieu de cartes en mémoire
+- **Mettez en file d'attente la génération d'IA** pour gérer les pics de trafic
+
+## Configuration
 
 ```bash
-cp .env.example .env
+cp .env.example .env   # remplissez vos jetons (voir ci-dessous)
 npm install
 npm run dev
 ```
 
-### Variables
+**Variables d'environnement requises :**
 
-| Variable | Source |
-|----------|--------|
-| TELEGRAM_BOT_TOKEN | @BotFather |
-| OPENROUTER_API_KEY | openrouter.ai |
+| Variable | Où l'obtenir |
+|----------|-----------------|
+| `TELEGRAM_BOT_TOKEN` | [@BotFather](https://t.me/BotFather) sur Telegram |
+| `OPENROUTER_API_KEY` | [openrouter.ai](https://openrouter.ai) (formule gratuite disponible) |
 
-## Commands
+**Facultatif :**
 
-| Command | Description |
+```env
+OPENROUTER_MODEL=meta-llama/llama-3.3-8b-instruct:free
+DATABASE_URL=postgresql://user:pass@localhost:5432/trivia
+```
+
+Parcourez les modèles gratuits sur [openrouter.ai/models?q=free](https://openrouter.ai/models?q=free). Le bot utilise par défaut `openai/gpt-oss-120b:free`.
+
+## Commandes
+
+| Commande | Description |
 |---------|-------------|
-| /quiz | Quiz solo |
-| /gquiz | Quiz groupe |
-| /achievements | Badges |
-| /leaderboard | Top global |
-| /topleaderboard | Par catégorie |
-| /stats | Stats utilisateur |
-| /scoring | Explication score |
-| /cancel | Stop quiz |
-| /about | Infos bot |
+| `/quiz` | Lancer un quiz en solo — demande le thème, le nombre de questions et le niveau de difficulté |
+| `/gquiz` | Lancer un quiz en groupe dans une discussion de groupe |
+| `/achievements` | Afficher vos badges obtenus |
+| `/leaderboard` | Top 10 mondial |
+| `/topleaderboard` | Meilleurs joueurs par catégorie |
+| `/stats` | Vos statistiques cumulées |
+| `/scoring` | Explication du système de notation |
+| `/cancel` | Arrêter un quiz en cours |
+| `/about` | À propos de ce bot |
 
-## Difficulté
+## Niveaux de difficulté
 
-🟢 Easy · 🟡 Medium · 🔴 Hard · 🎲 Random
+🟢 Facile · 🟡 Moyen · 🔴 Difficile · 🎲 Aléatoire (choisi par l'IA pour chaque question)
 
-## Scoring
+La difficulté influe sur le multiplicateur de score : un quiz difficile parfaitement réussi rapporte jusqu'à 2 fois plus de points qu'un quiz facile. Répondre rapidement ajoute un bonus de vitesse supplémentaire (jusqu'à +30 % pour moins de 5 secondes par question).
 
-Score = Accuracy × 1000 × Difficulty × Speed × Bonus
+## Système de notation
 
-## Achievements
+**Formule :** `Score = Précision × 1000 × Multiplicateur de difficulté × Bonus de vitesse × Bonus de perfection`
 
-- 20 achievements (solo + groupe)
-- perfect scores
-- streaks
-- top rankings
+- **Précision :** nombre de bonnes réponses / nombre total de questions
+- **Difficulté :** Facile (1,0x), Moyen (1,5x), Difficile (2,0x), Aléatoire (moyenne pondérée)
+- **Vitesse :** <5 s en moyenne (+30 %), <10 s (+15 %), <20 s (+5 %)
+- **Parfait :** bonus de +10 % pour une précision de 100 %
 
-## Structure
+Consultez la commande `/scoring` dans le bot pour obtenir un détail complet.
+
+## Succès
+
+Il y a 20 succès à débloquer en mode solo et en mode groupe :
+
+- Gagner 1 / 5 / 10 quiz en groupe
+- Terminer 1 / 5 / 10 quiz en solo
+- Obtenir un score parfait à un quiz de 5 / 10 / 15 / 20 questions
+- Réaliser une moyenne inférieure à 20 / 10 / 5 secondes par question
+- Réussir 3 quiz parfaits d'affilée
+- Participer à 1 / 5 / 10 quiz en groupe
+- Donner la première bonne réponse à la question 1 d'un quiz en groupe
+- Se classer dans le top 5 du classement mondial
+- Atteindre la 1re place dans n'importe quelle catégorie
+
+## Structure du projet
 
 ```
 tele-quiz-bot/
@@ -201,26 +231,37 @@ tele-quiz-bot/
 └── .env.example            # Modèle de variables d'environnement
 ```
 
-## Tech stack
+## Pile technologique
 
-- Telegraf
-- OpenRouter
-- OpenTDB
-- PostgreSQL
-- TypeScript
-- Vitest
+- **[Telegraf](https://telegraf.js.org/)** — Framework pour bot Telegram
+- **[OpenRouter](https://openrouter.ai)** — Passerelle API LLM (prend en charge de nombreux modèles gratuits)
+- **[OpenTDB](https://opentdb.com)** — Base de données gratuite de questions-réponses vérifiées par des humains
+- **PostgreSQL** — Stockage persistant pour les scores, les statistiques et les succès
+- **TypeScript + tsx** — S'exécute directement sans étape de compilation en développement
+- **Vitest** — Tests unitaires pour la notation, le classement et la logique de validation
 
-## Tests
+## Exécution des tests
 
 ```bash
 npm test
+```
+
+Trois suites de tests couvrent la logique principale :
+
+- **notation** — vérifie la formule de notation pondérée en tenant compte des multiplicateurs de difficulté, des bonus de vitesse et des cas limites tels que zéro question ou un score parfait
+- **classement** — vérifie le classement, le dénouement des ex aequo et l'agrégation des scores
+- **validation** — garantit que les entrées relatives au nombre de sujets/questions sont rejetées ou acceptées correctement
+
+Pour exécuter avec couverture :
+
+```bash
 npm run test:coverage
 ```
 
 ## Contribuer
 
-PRs welcome.
+Les tickets et les pull requests sont les bienvenus. Pour les modifications importantes, veuillez d'abord ouvrir un ticket afin de discuter de ce que vous souhaitez modifier.
 
-## License
+## Licence
 
 MIT
