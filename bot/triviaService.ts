@@ -1,9 +1,20 @@
+/**
+ * triviaService.ts
+ *
+ * Strategy (in order):
+ *  1. Fetch from Open Trivia DB (human-verified, free, no key needed)
+ *  2. If opentdb returns fewer questions than requested, top up with AI generation
+ *
+ * This eliminates the main source of wrong answers: AI hallucinating trivia facts.
+ */
+
 import {
   generateTriviaQuestions,
   type TriviaQuestion,
 } from "./openrouter";
+import { fetchFromOpentdb } from "./opentdb";
 
-const CACHE_TTL_MS = 1000 * 60 * 30;
+const CACHE_TTL_MS = 1000 * 60 * 30; // 30 minutes
 
 const questionCache = new Map<
   string,
@@ -48,7 +59,6 @@ function isMathQuestionReasonable(question: TriviaQuestion): boolean {
   if (values.some((value) => value === null)) {
     return false;
   }
-
   const uniqueValues = new Set(values);
   return uniqueValues.size > 1;
 }
@@ -90,6 +100,16 @@ function sanitizeQuestion(question: TriviaQuestion): TriviaQuestion {
   };
 }
 
+/** Remove duplicate questions (same question text) across two arrays */
+function deduplicateQuestions(
+  primary: TriviaQuestion[],
+  secondary: TriviaQuestion[],
+): TriviaQuestion[] {
+  const seen = new Set(primary.map((q) => q.question.toLowerCase()));
+  const unique = secondary.filter((q) => !seen.has(q.question.toLowerCase()));
+  return [...primary, ...unique];
+}
+
 export async function fetchValidatedTriviaQuestions(
   topic: string,
   count: number,
@@ -98,30 +118,64 @@ export async function fetchValidatedTriviaQuestions(
   const cacheKey = buildCacheKey(topic, count, difficulty);
   const cached = questionCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
-    return cached.questions.map((question) => ({
-      ...question,
-      options: question.options.map((option) => option),
-    }));
+    return cached.questions.slice(0, count);
   }
 
-  const questions = await generateTriviaQuestions(topic, count, difficulty);
-  const validQuestions = questions
-    .filter(isValidQuestion)
-    .filter((question) =>
-      isLikelyMathTopic(topic) ? isMathQuestionReasonable(question) : true,
-    )
-    .map(sanitizeQuestion);
+  // ── Step 1: Fetch from Open Trivia DB (human-verified) ──────────────────
+  let verifiedQuestions: TriviaQuestion[] = [];
+  try {
+    const raw = await fetchFromOpentdb(topic, count, difficulty);
+    verifiedQuestions = raw
+      .filter(isValidQuestion)
+      .filter((q) => (isLikelyMathTopic(topic) ? isMathQuestionReasonable(q) : true))
+      .map(sanitizeQuestion);
+    console.info(`[triviaService] opentdb returned ${verifiedQuestions.length}/${count} questions for "${topic}"`);
+  } catch (err) {
+    console.warn("[triviaService] opentdb fetch failed, continuing to AI:", err);
+  }
 
-  if (validQuestions.length < count) {
+  // ── Step 2: Top up with AI if opentdb didn't return enough ──────────────
+  let finalQuestions = verifiedQuestions;
+
+  if (finalQuestions.length < count) {
+    const needed = count - finalQuestions.length;
+    console.info(`[triviaService] requesting ${needed} AI-generated questions for "${topic}"`);
+
+    try {
+      const aiRaw = await generateTriviaQuestions(topic, needed, difficulty);
+      const aiValid = aiRaw
+        .filter(isValidQuestion)
+        .filter((q) => (isLikelyMathTopic(topic) ? isMathQuestionReasonable(q) : true))
+        .map(sanitizeQuestion);
+
+      // Merge, dropping any AI questions that duplicate verified ones
+      finalQuestions = deduplicateQuestions(verifiedQuestions, aiValid).slice(0, count);
+      console.info(
+        `[triviaService] after AI top-up: ${finalQuestions.length}/${count} questions`,
+      );
+    } catch (aiErr) {
+      console.error("[triviaService] AI generation failed:", aiErr);
+      // If we have at least 1 verified question, use what we have; otherwise rethrow
+      if (finalQuestions.length === 0) {
+        throw aiErr;
+      }
+    }
+  }
+
+  if (finalQuestions.length === 0) {
     throw new Error(
-      "AI returned invalid or low-confidence questions. Please choose a different topic or try again.",
+      "Could not fetch any valid questions. Please try a different topic.",
     );
   }
 
-  const result = validQuestions.slice(0, count);
+  // It's fine to return fewer than `count` if both sources came up short;
+  // the caller (quiz runner) should handle variable-length question arrays.
+  const result = finalQuestions.slice(0, count);
+
   questionCache.set(cacheKey, {
     questions: result,
     expiresAt: Date.now() + CACHE_TTL_MS,
   });
+
   return result;
 }

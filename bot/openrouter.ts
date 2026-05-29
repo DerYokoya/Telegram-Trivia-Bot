@@ -33,9 +33,16 @@ export async function generateTriviaQuestions(
 
   const prompt = `Create exactly ${count} multiple-choice trivia questions about "${topic}".
 ${difficultyInstruction}
-Each question must have exactly 4 options and one clearly correct answer.
-Keep questions concise (under 200 chars). Keep options under 80 chars each.
-Provide a one-sentence explanation for the correct answer.
+
+CRITICAL ACCURACY RULES — follow these or the questions will be rejected:
+- Only include facts you are certain are correct. If you are unsure, skip the question.
+- Do NOT invent statistics, dates, or records that you cannot verify with confidence.
+- Each question must have EXACTLY ONE clearly correct answer and 3 clearly wrong answers.
+- Wrong options must be plausible but unambiguously incorrect — not trick answers.
+- Avoid questions about very recent events (post-2023) where your knowledge may be outdated.
+- Prefer well-established, timeless facts over recent or disputed claims.
+- Keep questions concise (under 200 chars). Keep options under 80 chars each.
+- Provide a one-sentence explanation that names the correct answer and briefly explains why.
 
 Respond ONLY with valid JSON in this exact shape, no markdown fences, no commentary:
 {
