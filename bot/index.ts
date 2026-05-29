@@ -1,6 +1,6 @@
 import { Telegraf, Markup } from "telegraf";
 import type { Context } from "telegraf";
-import { fetchValidatedTriviaQuestions } from "./triviaService";
+import { fetchValidatedTriviaQuestions, getTopicSource } from "./triviaService";
 import {
   getSession,
   resetSession,
@@ -1035,11 +1035,14 @@ export async function startTelegramBot(): Promise<void> {
     session.difficulty = difficulty;
     session.phase = "loading";
 
+    const source = getTopicSource(session.topic);
+    const loadingMsg =
+      source === "ai"
+        ? `Topic: <b>${escapeHtml(session.topic)}</b>\nQuestions: <b>${session.desiredCount}</b>\nDifficulty: <b>${diffLabel}</b>\n\n🤖 Generating with AI — this may take a few seconds…`
+        : `Topic: <b>${escapeHtml(session.topic)}</b>\nQuestions: <b>${session.desiredCount}</b>\nDifficulty: <b>${diffLabel}</b>\n\n⏳ Loading…`;
+
     try {
-      await ctx.editMessageText(
-        `Topic: <b>${escapeHtml(session.topic)}</b>\nQuestions: <b>${session.desiredCount}</b>\nDifficulty: <b>${diffLabel}</b>\n\nGenerating…`,
-        { parse_mode: "HTML" },
-      );
+      await ctx.editMessageText(loadingMsg, { parse_mode: "HTML" });
     } catch {
       /* ignore */
     }
@@ -1135,11 +1138,14 @@ export async function startTelegramBot(): Promise<void> {
     session.difficulty = difficulty;
     session.phase = "loading";
 
+    const source = getTopicSource(session.topic);
+    const loadingMsg =
+      source === "ai"
+        ? `Topic: <b>${escapeHtml(session.topic)}</b>\nQuestions: <b>${session.desiredCount}</b>\nDifficulty: <b>${diffLabel}</b>\n\n🤖 Generating with AI — this may take a few seconds…`
+        : `Topic: <b>${escapeHtml(session.topic)}</b>\nQuestions: <b>${session.desiredCount}</b>\nDifficulty: <b>${diffLabel}</b>\n\n⏳ Loading…`;
+
     try {
-      await ctx.editMessageText(
-        `Topic: <b>${escapeHtml(session.topic)}</b>\nQuestions: <b>${session.desiredCount}</b>\nDifficulty: <b>${diffLabel}</b>\n\nGenerating…`,
-        { parse_mode: "HTML" },
-      );
+      await ctx.editMessageText(loadingMsg, { parse_mode: "HTML" });
     } catch {
       /* ignore */
     }

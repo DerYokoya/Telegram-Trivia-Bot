@@ -12,6 +12,7 @@
 
 import { generateTriviaQuestions, type TriviaQuestion } from "./openrouter";
 import { assessOpentdbSuitability, fetchFromOpentdb } from "./opentdb";
+export { assessOpentdbSuitability }; // re-export so index.ts only needs one import
 
 const CACHE_TTL_MS = 1000 * 60 * 30; // 30 minutes
 
@@ -142,4 +143,13 @@ export async function fetchValidatedTriviaQuestions(
   const result = finalQuestions.slice(0, count);
   questionCache.set(cacheKey, { questions: result, expiresAt: Date.now() + CACHE_TTL_MS });
   return result;
+}
+
+/**
+ * Returns whether a given topic will use opentdb (instant) or AI (slower).
+ * Call this before fetchValidatedTriviaQuestions to show the right loading message.
+ */
+export function getTopicSource(topic: string): "opentdb" | "ai" {
+  const { suitable } = assessOpentdbSuitability(topic);
+  return suitable ? "opentdb" : "ai";
 }
