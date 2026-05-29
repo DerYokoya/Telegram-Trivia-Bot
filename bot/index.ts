@@ -423,7 +423,7 @@ async function finishGroupQuiz(ctx: Context, session: GroupQuizSession) {
       }
       const avgMs = p.correct > 0 ? p.totalCorrectMs / p.correct : 0;
       const pct = total > 0 ? Math.round((p.correct / total) * 100) : 0;
-      
+
       // Calculate weighted score for display (optional)
       const weightedScore = calculateWeightedScore({
         correct: p.correct,
@@ -432,7 +432,7 @@ async function finishGroupQuiz(ctx: Context, session: GroupQuizSession) {
         difficulty: session.difficulty,
         questionDifficulties: session.questionDifficulties,
       });
-      
+
       lines.push(
         `${medal(rank)} <b>${escapeHtml(p.displayName)}</b>` +
           `  ✅ ${p.correct}/${total} (${pct}%)` +
@@ -509,13 +509,13 @@ async function finishGroupQuiz(ctx: Context, session: GroupQuizSession) {
 
   // Achievements + leaderboard for all participants
   const allNewAchs = new Map<number, string[]>();
-  
+
   for (const p of standings) {
     if (p.correct === 0) continue;
-    
+
     const avgSpeedMs = p.correct > 0 ? p.totalCorrectMs / p.correct : 0;
     const isWinner = winnerIds.has(p.userId);
-    
+
     const newAchs = await recordGroupQuizParticipation(
       p.userId,
       isWinner,
@@ -523,7 +523,7 @@ async function finishGroupQuiz(ctx: Context, session: GroupQuizSession) {
       total,
       avgSpeedMs,
     );
-    
+
     if (newAchs.length > 0) allNewAchs.set(p.userId, newAchs);
 
     await addToLifetimeStats(p.userId, p.correct, total);
@@ -694,7 +694,21 @@ export async function startTelegramBot(): Promise<void> {
     session.phase = "awaiting_topic";
     await ctx.reply(
       "What topic do you want to be quizzed on?\n\n" +
-        "Examples: <i>World War II</i>, <i>Greek mythology</i>, <i>NBA history</i>, <i>Quantum physics</i>",
+        "Examples:\n" +
+        "• <i>General Knowledge</i>\n" +
+        "• <i>Trivia</i>\n" +
+        "• <i>Books</i> · <i>Literature</i>\n" +
+        "• <i>Films</i> · <i>Movies</i>\n" +
+        "• <i>Music</i> · <i>Television</i>\n" +
+        "• <i>Video Games</i> · <i>Gaming</i>\n" +
+        "• <i>Science</i> · <i>Nature</i>\n" +
+        "• <i>Biology</i> · <i>Chemistry</i> · <i>Physics</i>\n" +
+        "• <i>Technology</i> · <i>Computers</i> · <i>Programming</i>\n" +
+        "• <i>Math</i> · <i>Mathematics</i> · <i>Algebra</i> · <i>Geometry</i>\n" +
+        "• <i>Mythology</i> · <i>Sports</i>\n" +
+        "• <i>Geography</i> · <i>Countries</i>\n" +
+        "• <i>History</i> · <i>Politics</i> · <i>Government</i>\n" +
+        "• <i>Animals</i> · <i>Wildlife</i>",
       { parse_mode: "HTML" },
     );
   });
