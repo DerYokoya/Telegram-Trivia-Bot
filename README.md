@@ -226,7 +226,7 @@ tele-quiz-bot/
 │ ├── scoring.test.ts       # Score calculation unit tests
 │ ├── leaderboard.test.ts   # Leaderboard ranking and tie-breaking tests
 │ └── validation.test.ts    # Input validation tests
-└── .env.example # Environment variable template
+└── .env.example            # Environment variable template
 ```
 
 ## Tech stack
