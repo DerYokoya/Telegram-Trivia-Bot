@@ -31,18 +31,23 @@ export async function generateTriviaQuestions(
     ? `Vary the difficulty — include a mix of easy, medium, and hard questions. For each question include a "difficulty" field set to exactly one of: "easy", "medium", or "hard".`
     : `All questions must be at ${difficulty} difficulty. For each question include a "difficulty" field set to "${difficulty}".`;
 
-  const prompt = `Create exactly ${count} multiple-choice trivia questions about "${topic}".
+  const prompt = `Create exactly ${count} multiple-choice trivia questions specifically about "${topic}".
 ${difficultyInstruction}
 
-CRITICAL ACCURACY RULES — follow these or the questions will be rejected:
-- Only include facts you are certain are correct. If you are unsure, skip the question.
-- Do NOT invent statistics, dates, or records that you cannot verify with confidence.
-- Each question must have EXACTLY ONE clearly correct answer and 3 clearly wrong answers.
-- Wrong options must be plausible but unambiguously incorrect — not trick answers.
-- Avoid questions about very recent events (post-2023) where your knowledge may be outdated.
-- Prefer well-established, timeless facts over recent or disputed claims.
+TOPIC RELEVANCE — most important rule:
+- Every single question MUST be directly about "${topic}". No exceptions.
+- Do NOT include tangentially related questions (e.g. for "WWII" do not ask about WWI, the Roman Empire, or unrelated history).
+- Do NOT include general trivia questions just because you ran out of topic-specific ideas — generate fewer questions instead if needed.
+- If you cannot generate ${count} on-topic questions, generate as many as you can (minimum 1).
+
+ACCURACY RULES:
+- Only include facts you are certain are correct. Skip any question you are unsure about.
+- Do NOT invent statistics, dates, or records you cannot verify with high confidence.
+- Each question must have EXACTLY ONE clearly correct answer and 3 clearly wrong options.
+- Wrong options must be plausible but unambiguously incorrect.
+- Avoid questions about events after 2023 where your knowledge may be incomplete.
 - Keep questions concise (under 200 chars). Keep options under 80 chars each.
-- Provide a one-sentence explanation that names the correct answer and briefly explains why.
+- Provide a one-sentence explanation naming the correct answer and briefly explaining why.
 
 Respond ONLY with valid JSON in this exact shape, no markdown fences, no commentary:
 {

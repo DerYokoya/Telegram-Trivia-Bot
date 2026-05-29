@@ -4,18 +4,27 @@
  * Fetches human-verified trivia questions from the Open Trivia Database
  * (https://opentdb.com) — a free API with 4,000+ community-curated questions.
  *
- * Used as the PRIMARY source before falling back to AI generation.
+ * KEY DESIGN DECISION:
+ *   opentdb uses broad fixed categories (e.g. "History", "Sports").
+ *   If the user's topic is MORE SPECIFIC than a category (e.g. "WWII", "NBA 1960s"),
+ *   opentdb will return off-topic questions from the whole category.
+ *
+ *   Rules:
+ *   - If the topic maps to a specific category AND the topic IS that category
+ *     (e.g. topic = "history" → category 23 "History") → use opentdb.
+ *   - If the topic is a sub-topic (e.g. "WWII", "NBA 1960s", "Roman Empire") →
+ *     skip opentdb entirely; go straight to AI which can target the exact topic.
+ *   - If no category match at all → skip opentdb (random questions would be useless).
  */
 
 import type { TriviaQuestion } from "./openrouter";
 
 const OPENTDB_BASE = "https://opentdb.com/api.php";
 
-// opentdb difficulty maps 1:1 to our difficulty type
 type OpentdbDifficulty = "easy" | "medium" | "hard";
 
 interface OpentdbResponse {
-  response_code: number; // 0 = success, 1 = no results, 2 = invalid param, etc.
+  response_code: number;
   results: OpentdbQuestion[];
 }
 
@@ -28,7 +37,6 @@ interface OpentdbQuestion {
   incorrect_answers: string[];
 }
 
-// HTML entity decode (opentdb encodes entities like &amp; &#039; etc.)
 function decodeHtml(html: string): string {
   return html
     .replace(/&amp;/g, "&")
@@ -57,24 +65,17 @@ function shuffleArray<T>(arr: T[]): { shuffled: T[]; originalIndices: number[] }
   };
 }
 
-/**
- * Convert a raw opentdb question into our TriviaQuestion format.
- * Returns null if the question is boolean-only (not suitable as MCQ).
- */
 function convertQuestion(raw: OpentdbQuestion): TriviaQuestion | null {
-  if (raw.type !== "multiple") return null; // skip true/false questions
+  if (raw.type !== "multiple") return null;
   if (raw.incorrect_answers.length !== 3) return null;
 
   const correctDecoded = decodeHtml(raw.correct_answer);
   const incorrectDecoded = raw.incorrect_answers.map(decodeHtml);
   const questionDecoded = decodeHtml(raw.question);
 
-  // Build a 4-option array: [correct, ...incorrect], then shuffle
   const allOptions = [correctDecoded, ...incorrectDecoded];
   const { shuffled, originalIndices } = shuffleArray(allOptions);
-
-  // Find where the correct answer ended up after shuffle
-  const correctIndexAfterShuffle = originalIndices.indexOf(0); // original index 0 was the correct answer
+  const correctIndexAfterShuffle = originalIndices.indexOf(0);
 
   return {
     question: questionDecoded,
@@ -85,35 +86,162 @@ function convertQuestion(raw: OpentdbQuestion): TriviaQuestion | null {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Category map — each entry has:
+//   id        : opentdb category ID
+//   broad     : keywords that ARE the category (opentdb is a good match)
+//   specific  : keywords that are SUB-TOPICS (opentdb would be off-topic)
+// ---------------------------------------------------------------------------
+
+interface CategoryEntry {
+  id: number;
+  broad: RegExp;
+  specific: RegExp | null;
+}
+
+const CATEGORY_ENTRIES: CategoryEntry[] = [
+  {
+    id: 9,
+    broad: /^(general knowledge|trivia|mixed|general trivia)$/i,
+    specific: null,
+  },
+  {
+    id: 10,
+    broad: /\b(books?|literature|novels?|fiction)\b/i,
+    specific: /\b(harry potter|lord of the rings|1984|shakespeare|dickens|tolkien|agatha christie|stephen king)\b/i,
+  },
+  {
+    id: 11,
+    broad: /\b(films?|movies?|cinema|hollywood)\b/i,
+    specific: /\b(marvel|star wars|james bond|disney|pixar|horror movies|action movies|[0-9]{4}s? films?)\b/i,
+  },
+  {
+    id: 12,
+    broad: /\b(music|songs?|bands?|albums?|artists?)\b/i,
+    specific: /\b(rock music|jazz|classical music|hip hop|pop music|[0-9]{4}s? music|beatles|elvis|taylor swift|michael jackson)\b/i,
+  },
+  {
+    id: 14,
+    broad: /\b(television|tv shows?|sitcoms?|series)\b/i,
+    specific: /\b(breaking bad|game of thrones|friends|the office|netflix|[0-9]{4}s? tv)\b/i,
+  },
+  {
+    id: 15,
+    broad: /\b(video games?|gaming)\b/i,
+    specific: /\b(call of duty|minecraft|fortnite|pokemon|zelda|mario|playstation|xbox|[0-9]{4}s? games?|indie games?)\b/i,
+  },
+  {
+    id: 17,
+    broad: /\b(science|nature|biology|chemistry|physics)\b/i,
+    specific: /\b(quantum|evolution|genetics|astronomy|space|climate|neuroscience|organic chemistry)\b/i,
+  },
+  {
+    id: 18,
+    broad: /\b(computers?|programming|software|internet|technology|tech)\b/i,
+    specific: /\b(javascript|python|linux|cybersecurity|ai |machine learning|blockchain|[0-9]{4}s? tech)\b/i,
+  },
+  {
+    id: 19,
+    broad: /\b(math|mathematics|algebra|geometry|calculus|arithmetic)\b/i,
+    specific: null,
+  },
+  {
+    id: 20,
+    broad: /\b(mythology|myths?|legends?)\b/i,
+    specific: /\b(norse|greek|roman|egyptian|celtic|hindu|aztec|japanese mythology)\b/i,
+  },
+  {
+    id: 21,
+    broad: /\b(sports?)\b/i,
+    // Any sport + time period or specific team/league = too specific for opentdb
+    specific: /\b(nba|nfl|nhl|mlb|premier league|la liga|champions league|olympics|[0-9]{4}s?\s*(nba|nfl|sports?)|world cup [0-9]{4}|specific team)\b/i,
+  },
+  {
+    id: 22,
+    broad: /\b(geography|countries|capitals|continents)\b/i,
+    specific: /\b(european|asian|african|american|south american|oceanian|middle eastern)\b/i,
+  },
+  {
+    id: 23,
+    broad: /\b(history|historical)\b/i,
+    // Any specific war, era, empire, decade, country's history = too specific
+    specific: /\b(ww2|wwii|world war|cold war|vietnam|roman empire|ancient|medieval|renaissance|industrial revolution|civil war|napoleon|[0-9]{4}s?\s*history|american history|british history|french revolution|greek history)\b/i,
+  },
+  {
+    id: 24,
+    broad: /\b(politics|government|elections?|democracy)\b/i,
+    specific: /\b(american politics|us politics|british politics|republican|democrat|specific country)\b/i,
+  },
+  {
+    id: 27,
+    broad: /\b(animals?|wildlife|mammals?|birds?|fish|insects?|reptiles?)\b/i,
+    specific: /\b(marine|ocean|african|endangered|prehistoric|dinosaurs?)\b/i,
+  },
+];
+
+export interface OpentdbSuitability {
+  /** Whether opentdb is a good match for this topic */
+  suitable: boolean;
+  /** opentdb category ID to use, or null */
+  categoryId: number | null;
+  /** Reason, for logging */
+  reason: string;
+}
+
 /**
- * Attempt to fetch questions from opentdb.
- *
- * opentdb doesn't support arbitrary topic search — it uses numeric category IDs.
- * We map common topic keywords to category IDs, then fall back to "any category".
- * The caller should fall back to AI if this returns fewer questions than needed.
+ * Determine whether opentdb is a good source for this topic.
+ * Returns suitable=false for sub-topics that would yield off-topic questions.
+ */
+export function assessOpentdbSuitability(topic: string): OpentdbSuitability {
+  const normalized = topic.trim();
+
+  for (const entry of CATEGORY_ENTRIES) {
+    if (entry.broad.test(normalized)) {
+      // Topic matches this category's broad keywords
+      if (entry.specific && entry.specific.test(normalized)) {
+        // But it's a sub-topic — opentdb would be too broad
+        return {
+          suitable: false,
+          categoryId: null,
+          reason: `"${topic}" is a sub-topic; opentdb category would include off-topic questions`,
+        };
+      }
+      // Good match — topic IS the category
+      return {
+        suitable: true,
+        categoryId: entry.id,
+        reason: `"${topic}" matches opentdb category ${entry.id}`,
+      };
+    }
+  }
+
+  // No category match at all — opentdb would return completely random questions
+  return {
+    suitable: false,
+    categoryId: null,
+    reason: `"${topic}" has no matching opentdb category`,
+  };
+}
+
+/**
+ * Fetch verified questions from opentdb.
+ * Caller should check assessOpentdbSuitability() first.
  */
 export async function fetchFromOpentdb(
-  topic: string,
+  categoryId: number,
   count: number,
   difficulty: "easy" | "medium" | "hard" | "random" = "random",
 ): Promise<TriviaQuestion[]> {
-  const categoryId = topicToCategoryId(topic);
   const difficultyParam =
     difficulty === "random" ? "" : `&difficulty=${difficulty}`;
-  const categoryParam = categoryId ? `&category=${categoryId}` : "";
-
-  // opentdb caps at 50 per request; request a few extra to account for
-  // boolean questions that get filtered out.
   const requestCount = Math.min(50, count + 5);
 
-  const url =
-    `${OPENTDB_BASE}?amount=${requestCount}&type=multiple${difficultyParam}${categoryParam}`;
+  const url = `${OPENTDB_BASE}?amount=${requestCount}&type=multiple&category=${categoryId}${difficultyParam}`;
 
   let resp: Response;
   try {
     resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
   } catch (err) {
-    // Network failure — caller will fall back to AI
     console.warn("[opentdb] fetch failed:", err);
     return [];
   }
@@ -131,53 +259,13 @@ export async function fetchFromOpentdb(
     return [];
   }
 
-  // response_code 0 = OK, 1 = no results for params
   if (data.response_code !== 0 || !Array.isArray(data.results)) {
     console.info("[opentdb] no results (code", data.response_code, ")");
     return [];
   }
 
-  const converted = data.results
+  return data.results
     .map(convertQuestion)
-    .filter((q): q is TriviaQuestion => q !== null);
-
-  return converted.slice(0, count);
-}
-
-// ---------------------------------------------------------------------------
-// Topic → opentdb category mapping
-// opentdb category list: https://opentdb.com/api_category.php
-// ---------------------------------------------------------------------------
-
-const CATEGORY_MAP: Array<{ patterns: RegExp; id: number }> = [
-  { patterns: /\b(general|trivia|mixed|random|everything)\b/i, id: 9 },
-  { patterns: /\b(book|literature|novel|fiction)\b/i, id: 10 },
-  { patterns: /\b(film|movie|cinema|hollywood)\b/i, id: 11 },
-  { patterns: /\b(music|song|band|album|artist)\b/i, id: 12 },
-  { patterns: /\b(musical|theatre|theater|broadway)\b/i, id: 13 },
-  { patterns: /\b(television|tv show|sitcom|series)\b/i, id: 14 },
-  { patterns: /\b(video game|gaming|game|console|playstation|xbox|nintendo)\b/i, id: 15 },
-  { patterns: /\b(board game|card game|tabletop)\b/i, id: 16 },
-  { patterns: /\b(science|nature|biology|chemistry|physics|scientific)\b/i, id: 17 },
-  { patterns: /\b(computer|programming|software|internet|technology|tech|coding)\b/i, id: 18 },
-  { patterns: /\b(math|mathematics|algebra|geometry|calculus|arithmetic)\b/i, id: 19 },
-  { patterns: /\b(mythology|myth|legend|gods?|zeus|thor|olympus)\b/i, id: 20 },
-  { patterns: /\b(sport|sports|football|soccer|basketball|baseball|tennis|olympic)\b/i, id: 21 },
-  { patterns: /\b(geography|country|countries|capital|continent|map)\b/i, id: 22 },
-  { patterns: /\b(history|historical|ancient|war|revolution|empire)\b/i, id: 23 },
-  { patterns: /\b(politics|government|politician|election|president|democracy)\b/i, id: 24 },
-  { patterns: /\b(celebrity|famous|pop culture|entertainment)\b/i, id: 26 },
-  { patterns: /\b(animal|animals|wildlife|mammal|bird|fish|insect|reptile)\b/i, id: 27 },
-  { patterns: /\b(vehicle|car|automobile|motorcycle|truck|aviation|aircraft)\b/i, id: 28 },
-  { patterns: /\b(comic|superhero|marvel|dc |batman|superman)\b/i, id: 29 },
-  { patterns: /\b(gadget|electronics|device|appliance)\b/i, id: 30 },
-  { patterns: /\b(anime|manga|japanese animation)\b/i, id: 31 },
-  { patterns: /\b(cartoon|animation|animated)\b/i, id: 32 },
-];
-
-function topicToCategoryId(topic: string): number | null {
-  for (const entry of CATEGORY_MAP) {
-    if (entry.patterns.test(topic)) return entry.id;
-  }
-  return null; // no match → opentdb will return questions from any category
+    .filter((q): q is TriviaQuestion => q !== null)
+    .slice(0, count);
 }
