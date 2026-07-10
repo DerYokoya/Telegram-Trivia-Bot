@@ -4,8 +4,6 @@
 
 Un bot Telegram qui génère des questions de quiz sur n’importe quel sujet grâce à un LLM, avec modes solo et groupe, système de score, achievements et classements. Construit avec TypeScript, Telegraf et OpenRouter.
 
-[![Utiliser le bot](https://img.shields.io/badge/Use-Bot-cyan?style=for-the-badge)](https://t.me/UraharaTriviaBot/)
-
 ## Démo vidéo
 
 https://github.com/user-attachments/assets/e5f86bf1-aa36-40b8-bb08-26849f96e006
