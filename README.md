@@ -1,3 +1,5 @@
+[Français](./README.fr.md) | **English**
+
 # Telegram Trivia Bot
 
 A Telegram bot that generates trivia questions on any topic using an LLM, with solo and group play, a scoring system, achievements, and leaderboards. Built with TypeScript, Telegraf, and OpenRouter.
