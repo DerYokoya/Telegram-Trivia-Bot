@@ -273,7 +273,7 @@ export function registerCommands(bot: any) {
     await ctx.reply(
       "🤖 <b>Trivia Bot</b>\n" +
         "AI-generated trivia on any topic.\n\n" +
-        "Built with Telegraf + OpenRouter.\n" +
+        "Built with Telegraf + Groq.\n" +
         "by DerYokoya.\n\n" +
         "Send /quiz to begin!",
       {

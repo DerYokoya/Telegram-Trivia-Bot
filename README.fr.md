@@ -2,7 +2,7 @@
 
 # Bot Telegram de Quiz
 
-Un bot Telegram qui génère des questions de quiz sur n’importe quel sujet grâce à un LLM, avec modes solo et groupe, système de score, achievements et classements. Construit avec TypeScript, Telegraf et OpenRouter.
+Un bot Telegram qui génère des questions de quiz sur n’importe quel sujet grâce à un LLM, avec modes solo et groupe, système de score, achievements et classements. Construit avec TypeScript, Telegraf et Groq.
 
 ## Démo vidéo
 
@@ -35,7 +35,7 @@ https://github.com/user-attachments/assets/138c8353-daff-4261-98e0-4ceb87942f23
 
 ## Comment ça fonctionne
 
-Tu choisis un sujet, un nombre de questions et un niveau de difficulté. Le bot essaie d’abord de trouver le sujet dans [OpenTDB](https://opentdb.com). S’il ne trouve rien, il utilise [OpenRouter](https://openrouter.ai) pour générer des questions à la volée. Le score prend en compte la précision, la difficulté et la vitesse de réponse, puis peut être enregistré dans un classement global et par catégorie si l’utilisateur l’autorise.
+Tu choisis un sujet, un nombre de questions et un niveau de difficulté. Le bot essaie d’abord de trouver le sujet dans [OpenTDB](https://opentdb.com). S’il ne trouve rien, il utilise [Groq](https://groq.com) pour générer des questions à la volée. Le score prend en compte la précision, la difficulté et la vitesse de réponse, puis peut être enregistré dans un classement global et par catégorie si l’utilisateur l’autorise.
 
 ## Choix de design
 
@@ -45,7 +45,7 @@ TypeScript a été choisi pour plusieurs raisons importantes :
 
 1. **Sécurité des types pour les machines à états complexes** — Les quiz solo et groupe gèrent des états complexes (question actuelle, résultats, timers, cooldowns). TypeScript garantit que les transitions sont valides et évite les erreurs runtime comme `null` ou `undefined`.
 
-2. **Contrats d’API stricts** — Le bot interagit avec OpenRouter, OpenTDB et PostgreSQL. Les interfaces TypeScript définissent les formes exactes des réponses.
+2. **Contrats d’API stricts** — Le bot interagit avec Groq, OpenTDB et PostgreSQL. Les interfaces TypeScript définissent les formes exactes des réponses.
 
 3. **Meilleure expérience développeur** — Autocomplétion, documentation inline et lisibilité améliorent la maintenabilité.
 
@@ -57,7 +57,7 @@ Le bot combine deux sources :
 
 **OpenTDB (Open Trivia Database)** — Base gratuite avec +4000 questions vérifiées couvrant 24 catégories.
 
-**Génération IA (OpenRouter)** — Utilisée pour les sujets précis ou niche (ex: “WWII”, “NBA 1960s”).
+**Génération IA (Groq)** — Utilisée pour les sujets précis ou niche (ex: “WWII”, “NBA 1960s”).
 
 **Pourquoi c’est important :** OpenTDB est rapide (~200ms) mais limité. L’IA est plus lente mais flexible.
 
@@ -147,16 +147,16 @@ npm run dev
 | Variable | Où l'obtenir |
 |----------|-----------------|
 | `TELEGRAM_BOT_TOKEN` | [@BotFather](https://t.me/BotFather) sur Telegram |
-| `OPENROUTER_API_KEY` | [openrouter.ai](https://openrouter.ai) (formule gratuite disponible) |
+| `GROQ_API_KEY` | [console.groq.com](https://console.groq.com/keys) (formule gratuite disponible) |
 
 **Facultatif :**
 
 ```env
-OPENROUTER_MODEL=meta-llama/llama-3.3-8b-instruct:free
+GROQ_MODEL=llama-3.3-70b-versatile
 DATABASE_URL=postgresql://user:pass@localhost:5432/trivia
 ```
 
-Parcourez les modèles gratuits sur [openrouter.ai/models?q=free](https://openrouter.ai/models?q=free). Le bot utilise par défaut `openai/gpt-oss-120b:free`.
+Parcourez les modèles sur [console.groq.com/docs/models](https://console.groq.com/docs/models). Le bot utilise par défaut `openai/gpt-oss-120b`.
 
 ## Commandes
 
@@ -209,7 +209,7 @@ Il y a 20 succès à débloquer en mode solo et en mode groupe :
 tele-quiz-bot/
 ├── index.ts                # Point d'entrée du bot, gestionnaires de commandes, requêtes de rappel
 ├── triviaService.ts        # Récupération et mise en cache des questions (hybride OpenTDB + IA)
-├── openrouter.ts           # Génération de questions par IA via l'API OpenRouter
+├── groq.ts           # Génération de questions par IA via l'API Groq
 ├── opentdb.ts              # Intégration de l'API OpenTDB + logique de correspondance des catégories
 ├── quiz.ts                 # Machine à états et gestion des sessions pour le quiz solo
 ├── groupquiz.ts            # Machine à états et gestion des sessions pour le quiz en groupe
@@ -232,7 +232,7 @@ tele-quiz-bot/
 ## Pile technologique
 
 - **[Telegraf](https://telegraf.js.org/)** — Framework pour bot Telegram
-- **[OpenRouter](https://openrouter.ai)** — Passerelle API LLM (prend en charge de nombreux modèles gratuits)
+- **[Groq](https://groq.com)** — API d’inférence LLM rapide (formule gratuite disponible)
 - **[OpenTDB](https://opentdb.com)** — Base de données gratuite de questions-réponses vérifiées par des humains
 - **PostgreSQL** — Stockage persistant pour les scores, les statistiques et les succès
 - **TypeScript + tsx** — S'exécute directement sans étape de compilation en développement

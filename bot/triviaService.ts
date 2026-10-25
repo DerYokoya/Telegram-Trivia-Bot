@@ -10,7 +10,7 @@
  *  3. If opentdb is NOT suitable: go straight to AI (which can target exact topics).
  */
 
-import { generateTriviaQuestions, type TriviaQuestion } from "./openrouter";
+import { generateTriviaQuestions, type TriviaQuestion } from "./groq";
 import { assessOpentdbSuitability, fetchFromOpentdb } from "./opentdb";
 export { assessOpentdbSuitability }; // re-export so index.ts only needs one import
 

@@ -1,4 +1,4 @@
-import type { TriviaQuestion } from "./openrouter";
+import type { TriviaQuestion } from "./groq";
 
 export type QuizPhase =
   | "idle"

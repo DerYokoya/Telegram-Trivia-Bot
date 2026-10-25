@@ -17,7 +17,7 @@
  *   - If no category match at all → skip opentdb (random questions would be useless).
  */
 
-import type { TriviaQuestion } from "./openrouter";
+import type { TriviaQuestion } from "./groq";
 
 const OPENTDB_BASE = "https://opentdb.com/api.php";
 

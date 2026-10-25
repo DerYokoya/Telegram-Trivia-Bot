@@ -2,7 +2,7 @@
 
 # Telegram Trivia Bot
 
-A Telegram bot that generates trivia questions on any topic using an LLM, with solo and group play, a scoring system, achievements, and leaderboards. Built with TypeScript, Telegraf, and OpenRouter.
+A Telegram bot that generates trivia questions on any topic using an LLM, with solo and group play, a scoring system, achievements, and leaderboards. Built with TypeScript, Telegraf, and Groq.
 
 ## Video Showcase
 
@@ -35,7 +35,7 @@ https://github.com/user-attachments/assets/138c8353-daff-4261-98e0-4ceb87942f23
 
 ## How it works
 
-You pick a topic, question count, and difficulty. The bot first tries to find the topic in [OpenTDB](https://opentdb.com). If it doesn't find it, it calls [OpenRouter](https://openrouter.ai) to generate fresh questions on the spot. Scores factor in accuracy, difficulty, and response speed, then, if the user allows it, feed into a global leaderboard and per-category rankings.
+You pick a topic, question count, and difficulty. The bot first tries to find the topic in [OpenTDB](https://opentdb.com). If it doesn't find it, it calls [Groq](https://groq.com) to generate fresh questions on the spot. Scores factor in accuracy, difficulty, and response speed, then, if the user allows it, feed into a global leaderboard and per-category rankings.
 
 ## Design Choices
 
@@ -45,7 +45,7 @@ TypeScript was chosen for several critical reasons:
 
 1. **Type Safety for Complex State Machines** — Both solo and group quizzes maintain complex state (current question, results, timers, cooldowns). TypeScript ensures state transitions are valid and prevents runtime errors like accessing properties on `null` or `undefined`.
 
-2. **API Contract Enforcement** — The bot interacts with multiple external services (OpenRouter API, OpenTDB, PostgreSQL). TypeScript interfaces define exact response shapes, catching mismatches before production.
+2. **API Contract Enforcement** — The bot interacts with multiple external services (Groq API, OpenTDB, PostgreSQL). TypeScript interfaces define exact response shapes, catching mismatches before production.
 
 3. **Better Developer Experience** — With 20 achievement types, leaderboard entry shapes, and quiz session objects, TypeScript's autocomplete and inline documentation make the codebase maintainable.
 
@@ -57,7 +57,7 @@ The bot implements a hybrid approach to question fetching, prioritizing performa
 
 **OpenTDB (Open Trivia Database)** — A free API with 4,000+ human-verified, fact-checked questions across 24 fixed categories (History, Science, Sports, etc.). Used when the user's topic exactly matches a category (e.g., "History", "Music").
 
-**AI Generation (OpenRouter)** — Used for specific sub-topics (e.g., "WWII", "NBA 1960s", "Greek Mythology") where OpenTDB would return off-topic questions from the broader category.
+**AI Generation (Groq)** — Used for specific sub-topics (e.g., "WWII", "NBA 1960s", "Greek Mythology") where OpenTDB would return off-topic questions from the broader category.
 
 **Why this matters:** OpenTDB responds in ~200ms with vetted content, but can't handle niche topics. AI generation takes longer (the time depends on what model is used) but can target anything. The hybrid approach gives users fast responses for common topics, with precise coverage for obscure ones.
 
@@ -145,16 +145,16 @@ npm run dev
 | Variable | Where to get it |
 |----------|-----------------|
 | `TELEGRAM_BOT_TOKEN` | [@BotFather](https://t.me/BotFather) on Telegram |
-| `OPENROUTER_API_KEY` | [openrouter.ai](https://openrouter.ai) (free tier available) |
+| `GROQ_API_KEY` | [console.groq.com](https://console.groq.com/keys) (free tier available) |
 
 **Optional:**
 
 ```env
-OPENROUTER_MODEL=meta-llama/llama-3.3-8b-instruct:free
+GROQ_MODEL=llama-3.3-70b-versatile
 DATABASE_URL=postgresql://user:pass@localhost:5432/trivia
 ```
 
-Browse free models at [openrouter.ai/models?q=free](https://openrouter.ai/models?q=free). The bot defaults to `openai/gpt-oss-120b:free`.
+Browse models at [console.groq.com/docs/models](https://console.groq.com/docs/models). The bot defaults to `openai/gpt-oss-120b`.
 
 ## Commands
 
@@ -207,7 +207,7 @@ There are 20 achievements to unlock across solo and group play:
 tele-quiz-bot/
 ├── index.ts                # Bot entry point, command handlers, callback queries
 ├── triviaService.ts        # Question fetching/caching (OpenTDB + AI hybrid)
-├── openrouter.ts           # AI question generation via OpenRouter API
+├── groq.ts           # AI question generation via Groq API
 ├── opentdb.ts              # OpenTDB API integration + category matching logic
 ├── quiz.ts                 # Solo quiz state machine and session management
 ├── groupquiz.ts            # Group quiz state machine and session management
@@ -230,7 +230,7 @@ tele-quiz-bot/
 ## Tech stack
 
 - **[Telegraf](https://telegraf.js.org/)** — Telegram bot framework
-- **[OpenRouter](https://openrouter.ai)** — LLM API gateway (supports many free models)
+- **[Groq](https://groq.com)** — Fast LLM inference API (free tier available)
 - **[OpenTDB](https://opentdb.com)** — Free, human-verified trivia database
 - **PostgreSQL** — persistent storage for scores, stats, and achievements
 - **TypeScript + tsx** — runs directly without a build step in dev
