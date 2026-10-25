@@ -1,11 +1,11 @@
 // webhook.ts
 import { Telegraf } from "telegraf";
-import { initLeaderboardStore } from "./leaderboard";
-import { registerCommands } from "./handlers/commands";
-import { registerActions } from "./handlers/actions";
-import { registerTextHandler } from "./handlers/text";
+import { initLeaderboardStore } from "./bot/leaderboard";
+import { registerCommands } from "./bot/handlers/commands";
+import { registerActions } from "./bot/handlers/actions";
+import { registerTextHandler } from "./bot/handlers/text";
 
-export async function setupWebhook(): Promise<void> {
+export async function setupWebhook(): Promise<Telegraf | undefined> {
   const token = process.env["TELEGRAM_BOT_TOKEN"];
   if (!token) {
     console.warn("TELEGRAM_BOT_TOKEN not set; Telegram bot disabled.");

@@ -1,8 +1,8 @@
 // server.ts
 import http from "http";
 import { setupWebhook } from "./webhook";
-import { healthCheck } from "./health";
-import { pool } from "./db";
+import { healthCheck } from "./bot/health";
+import { pool } from "./bot/db";
 
 const PORT = process.env.PORT || 3000;
 const WEBHOOK_PATH = "/webhook";
