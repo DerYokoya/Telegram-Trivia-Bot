@@ -140,6 +140,10 @@ npm install
 npm run dev
 ```
 
+By default, the bot uses **long polling**, so it can receive Telegram messages from a home PC without a public URL or open router port. Long polling clears an existing Telegram webhook while preserving pending updates. Stop any other running copy of this bot first; Telegram allows only one active update receiver per bot token.
+
+For a hosted webhook deployment instead, set `WEBHOOK_URL` to the app's public HTTPS base URL (for example, `https://your-app.example`). Do not add `/webhook`; the server adds that path. If `WEBHOOK_URL` is omitted, the bot uses long polling.
+
 **Required environment variables:**
 
 | Variable | Where to get it |
