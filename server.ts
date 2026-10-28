@@ -9,6 +9,10 @@ const WEBHOOK_PATH = "/webhook";
 
 async function startServer() {
   const bot = await setupWebhook();
+  const webhookBaseUrl = process.env.WEBHOOK_URL?.trim().replace(/\/+$/, "");
+  const webhookUrl = webhookBaseUrl
+    ? `${webhookBaseUrl}${WEBHOOK_PATH}`
+    : undefined;
   
   if (!bot) {
     console.error("Failed to setup bot");
@@ -60,12 +64,9 @@ async function startServer() {
 
   server.listen(PORT, async () => {
     console.log(`✅ Server running on port ${PORT}`);
-    console.log(`🔄 Webhook endpoint: ${WEBHOOK_PATH}`);
 
-    // Set webhook with Telegram
-    const webhookUrl = `${process.env.WEBHOOK_URL || `https://${process.env.RENDER_EXTERNAL_HOSTNAME || 'localhost'}`}${WEBHOOK_PATH}`;
-    
-    if (process.env.WEBHOOK_URL) {
+    if (webhookUrl) {
+      console.log(`🔄 Webhook endpoint: ${WEBHOOK_PATH}`);
       try {
         await bot.telegram.setWebhook(webhookUrl);
         console.log(`✅ Webhook set to: ${webhookUrl}`);
@@ -77,26 +78,39 @@ async function startServer() {
         console.error("❌ Failed to set webhook:", error);
       }
     } else {
-      console.warn("⚠️ WEBHOOK_URL not set. Webhook not configured.");
+      console.log("📡 WEBHOOK_URL not set; starting Telegram long polling.");
+      console.log("   Long polling clears any existing webhook and keeps pending updates.");
+      void bot
+        .launch()
+        .catch((error) => {
+          console.error("❌ Telegram long polling failed:", error);
+          process.exit(1);
+        });
     }
   });
 
   // Graceful shutdown
-  process.once("SIGINT", () => {
+  const shutdown = (signal: string) => {
     console.log("Shutting down...");
+    if (!webhookUrl) {
+      try {
+        bot.stop(signal);
+      } catch {
+        // The bot may still be connecting when shutdown is requested.
+      }
+    }
     server.close(() => {
-      if (pool) pool.end();
-      process.exit(0);
+      if (pool) {
+        void pool.end().finally(() => process.exit(0));
+      } else {
+        process.exit(0);
+      }
     });
-  });
+  };
+
+  process.once("SIGINT", () => shutdown("SIGINT"));
   
-  process.once("SIGTERM", () => {
-    console.log("Shutting down...");
-    server.close(() => {
-      if (pool) pool.end();
-      process.exit(0);
-    });
-  });
+  process.once("SIGTERM", () => shutdown("SIGTERM"));
 }
 
 // Start the server
